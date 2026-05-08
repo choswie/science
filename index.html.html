@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 피드백 — 에너지 스케이트 공원 탐구</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #f7f6f2;
+  --card:     #ffffff;
+  --surface:  #f0ede6;
+  --border:   #e2ddd4;
+  --text:     #1c1917;
+  --text2:    #6b6560;
+  --text3:    #a09a93;
+  --ink:      #2c2420;
+  --correct:  #166534;
+  --correct-bg: #f0fdf4;
+  --correct-bd: #bbf7d0;
+  --partial:  #92400e;
+  --partial-bg: #fffbeb;
+  --partial-bd: #fde68a;
+  --wrong:    #991b1b;
+  --wrong-bg: #fef2f2;
+  --wrong-bd: #fecaca;
+  --accent:   #1d4ed8;
+  --accent-bg:#eff6ff;
+  --radius:   18px;
+  --radius-sm:10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  color: white;
+  padding: 3.5rem 1.5rem 3rem;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 40px,
+    rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 80px
+  );
+}
+.hero-inner { max-width: 700px; margin: 0 auto; position: relative; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 20px; padding: 4px 14px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em;
+  margin-bottom: 16px; color: rgba(255,255,255,0.85);
+}
+.hero h1 {
+  font-family: 'Gowun Batang', serif;
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  font-weight: 700; line-height: 1.25;
+  margin-bottom: 8px;
+}
+.hero-sub { font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 1.75rem; }
+
+/* SCORE SUMMARY */
+.score-summary {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+}
+.score-circle {
+  width: 96px; height: 96px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.25);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.score-big { font-size: 26px; font-weight: 900; line-height: 1; }
+.score-max { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.score-meta { flex: 1; }
+.score-name { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+.score-info { font-size: 13px; color: rgba(255,255,255,0.55); }
+.score-pct {
+  font-size: 13px; font-weight: 700;
+  padding: 5px 14px; border-radius: 20px;
+  margin-top: 8px; display: inline-block;
+}
+.pct-high { background: rgba(52,211,153,0.2); color: #6ee7b7; }
+.pct-mid  { background: rgba(251,191,36,0.2);  color: #fcd34d; }
+.pct-low  { background: rgba(248,113,113,0.2);  color: #fca5a5; }
+
+/* PADLET SHARE */
+.padlet-box {
+  background: var(--accent-bg); border: 1.5px solid #bfdbfe;
+  border-radius: var(--radius-sm); padding: 14px 18px;
+  margin: 1.5rem auto 0; max-width: 700px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.padlet-box p { font-size: 13.5px; color: var(--accent); flex: 1; line-height: 1.6; }
+.btn-copy {
+  background: var(--accent); color: white;
+  border: none; border-radius: 20px;
+  padding: 8px 18px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-copy:hover { background: #1e40af; }
+
+/* ── MAIN ── */
+main { max-width: 700px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+/* PROGRESS BAR */
+.prog-section { margin-bottom: 2rem; }
+.prog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.prog-title { font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); }
+.prog-count { font-size: 12px; color: var(--text3); }
+.prog-track { display: flex; gap: 4px; }
+.prog-seg {
+  flex: 1; height: 6px; border-radius: 3px;
+  transition: background 0.3s;
+}
+
+/* Q CARD */
+.qcard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.qcard:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.07); }
+
+/* card top stripe */
+.qcard.grade-correct { border-top: 3px solid var(--correct); }
+.qcard.grade-partial  { border-top: 3px solid #f59e0b; }
+.qcard.grade-wrong    { border-top: 3px solid var(--wrong); }
+
+.qcard-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 1.1rem 1.4rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.qnum-badge {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; flex-shrink: 0;
+}
+.grade-correct .qnum-badge { background: var(--correct-bg); color: var(--correct); }
+.grade-partial  .qnum-badge { background: var(--partial-bg); color: var(--partial); }
+.grade-wrong    .qnum-badge { background: var(--wrong-bg);   color: var(--wrong); }
+
+.qcard-title { font-size: 15px; font-weight: 700; flex: 1; }
+.grade-pill {
+  font-size: 11.5px; font-weight: 700; padding: 4px 12px;
+  border-radius: 20px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 4px;
+}
+.pill-correct { background: var(--correct-bg); color: var(--correct); border: 1px solid var(--correct-bd); }
+.pill-partial  { background: var(--partial-bg);  color: var(--partial);  border: 1px solid var(--partial-bd); }
+.pill-wrong    { background: var(--wrong-bg);    color: var(--wrong);    border: 1px solid var(--wrong-bd); }
+
+.score-tag {
+  font-size: 12px; font-weight: 800; color: var(--text3);
+  background: var(--surface); border-radius: 12px;
+  padding: 3px 10px; flex-shrink: 0;
+}
+
+/* BODY */
+.qcard-body { padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
+
+/* student answer */
+.ans-block { background: var(--surface); border-radius: var(--radius-sm); padding: 12px 15px; }
+.block-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+.ans-text { font-size: 14px; line-height: 1.75; color: var(--text); white-space: pre-wrap; }
+
+/* feedback rows */
+.fb-row {
+  border-radius: var(--radius-sm); padding: 12px 15px;
+  border: 1px solid;
+}
+.fb-good    { background: var(--correct-bg); border-color: var(--correct-bd); }
+.fb-improve { background: var(--partial-bg); border-color: var(--partial-bd); }
+.fb-hint    { background: var(--accent-bg);  border-color: #bfdbfe; }
+.fb-row .block-label { margin-bottom: 5px; }
+.fb-good    .block-label { color: var(--correct); }
+.fb-improve .block-label { color: var(--partial); }
+.fb-hint    .block-label { color: var(--accent); }
+.fb-text { font-size: 13.5px; line-height: 1.75; color: var(--text2); }
+.fb-text strong { color: var(--text); font-weight: 700; }
+
+/* FOOTER */
+.footer {
+  text-align: center; padding: 2rem 1rem;
+  font-size: 12.5px; color: var(--text3); line-height: 1.8;
+}
+
+/* LOADING / ERROR */
+.center-box {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 60vh; gap: 16px;
+  font-size: 15px; color: var(--text2);
+}
+.center-box .icon { font-size: 48px; }
+.center-box h2 { font-size: 20px; font-weight: 700; color: var(--text); }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--ink); color: white;
+  border-radius: 24px; padding: 10px 22px;
+  font-size: 13px; font-weight: 600;
+  opacity: 0; pointer-events: none;
+  transition: all 0.25s; z-index: 999; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 600px) {
+  .hero { padding: 2.5rem 1.25rem 2.5rem; }
+  .qcard-head { flex-wrap: wrap; }
+  .score-circle { width: 80px; height: 80px; }
+  .score-big { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="center-box">
+    <div class="icon">⚡</div>
+    <h2>피드백 불러오는 중...</h2>
+    <p>잠시만 기다려 주세요</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── URL 파라미터에서 데이터 파싱 ──
+function loadData() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('data');
+    if (!raw) return null;
+    const decoded = decodeURIComponent(raw);
+    const json = atob(decoded);
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+const data = loadData();
+
+if (!data) {
+  document.getElementById('app').innerHTML = `
+    <div class="center-box">
+      <div class="icon">😅</div>
+      <h2>피드백 데이터를 불러올 수 없어요</h2>
+      <p>선생님이 공유한 정확한 링크를 사용해 주세요.</p>
+    </div>`;
+} else {
+  render(data);
+}
+
+function render(d) {
+  const results = d.results || [];
+  const totalScore = results.reduce((s, r) => s + (r.score || 0), 0);
+  const maxScore   = results.reduce((s, r) => s + (r.maxScore || 10), 0);
+  const pct = Math.round(totalScore / maxScore * 100);
+  const correctCount  = results.filter(r => r.grade === '정답').length;
+  const partialCount  = results.filter(r => r.grade === '부분정답').length;
+  const wrongCount    = results.filter(r => r.grade === '오답' || r.grade === '채점오류').length;
+
+  const pctClass = pct >= 80 ? 'pct-high' : pct >= 50 ? 'pct-mid' : 'pct-low';
+  const pctLabel = pct >= 80 ? '🎉 우수' : pct >= 50 ? '👍 보통' : '💪 노력 필요';
+
+  const pageUrl = window.location.href;
+
+  document.title = `${d.name} 님의 AI 피드백 — 에너지 스케이트 공원`;
+
+  document.getElementById('app').innerHTML = `
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">⚡ PhET 에너지 스케이트 공원 탐구 · AI 피드백</div>
+    <h1>${d.name} 님의<br>탐구 결과 리포트</h1>
+    <p class="hero-sub">${d.class || ''} ${d.id ? '· 학번 ' + d.id : ''}</p>
+    <div class="score-summary">
+      <div class="score-circle">
+        <div class="score-big">${totalScore}</div>
+        <div class="score-max">/ ${maxScore}점</div>
+      </div>
+      <div class="score-meta">
+        <div class="score-name">총점 ${totalScore} / ${maxScore}점</div>
+        <div class="score-info">정답 ${correctCount}개 &nbsp;·&nbsp; 부분정답 ${partialCount}개 &nbsp;·&nbsp; 오답 ${wrongCount}개</div>
+        <div class="score-pct ${pctClass}">${pctLabel} &nbsp;${pct}%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PADLET SHARE BOX -->
+<div class="padlet-box">
+  <p>📌 <strong>이 링크를 패들렛에 댓글로 붙여넣으면</strong> 선생님과 친구들이 볼 수 있어요!</p>
+  <button class="btn-copy" onclick="copyUrl()">🔗 링크 복사</button>
+</div>
+
+<!-- MAIN -->
+<main>
+  <!-- PROGRESS -->
+  <div class="prog-section">
+    <div class="prog-header">
+      <span class="prog-title">문제별 결과</span>
+      <span class="prog-count">정답 ${correctCount} / 전체 ${results.length}</span>
+    </div>
+    <div class="prog-track">
+      ${results.map(r => {
+        const c = r.grade === '정답' ? '#16a34a' : r.grade === '부분정답' ? '#d97706' : '#dc2626';
+        return `<div class="prog-seg" style="background:${c}" title="Q${r.qid}: ${r.grade}"></div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- Q CARDS -->
+  ${results.map(r => buildCard(r)).join('')}
+</main>
+
+<div class="footer">
+  AI 피드백은 학습을 돕기 위한 참고용입니다.<br>
+  궁금한 점은 선생님께 질문하세요 💬<br><br>
+  <span style="font-size:11px">⚡ PhET 에너지 스케이트 공원 탐구 활동</span>
+</div>`;
+}
+
+function buildCard(r) {
+  const gradeClass = r.grade === '정답' ? 'grade-correct' : r.grade === '부분정답' ? 'grade-partial' : 'grade-wrong';
+  const pillClass  = r.grade === '정답' ? 'pill-correct'  : r.grade === '부분정답' ? 'pill-partial'  : 'pill-wrong';
+  const pillIcon   = r.grade === '정답' ? '✅' : r.grade === '부분정답' ? '🔶' : '❌';
+
+  return `
+<article class="qcard ${gradeClass}">
+  <div class="qcard-head">
+    <div class="qnum-badge">Q${r.qid}</div>
+    <div class="qcard-title">${r.title}</div>
+    <div class="grade-pill ${pillClass}">${pillIcon} ${r.grade}</div>
+    <div class="score-tag">${r.score}/${r.maxScore}</div>
+  </div>
+  <div class="qcard-body">
+    <div class="ans-block">
+      <div class="block-label">📝 내 답안</div>
+      <div class="ans-text">${escHtml(r.answer)}</div>
+    </div>
+    ${r.good ? `
+    <div class="fb-row fb-good">
+      <div class="block-label">👍 잘한 점</div>
+      <div class="fb-text">${escHtml(r.good)}</div>
+    </div>` : ''}
+    ${r.improve ? `
+    <div class="fb-row fb-improve">
+      <div class="block-label">💡 보완할 점</div>
+      <div class="fb-text">${escHtml(r.improve)}</div>
+    </div>` : ''}
+    ${r.hint ? `
+    <div class="fb-row fb-hint">
+      <div class="block-label">🔑 핵심 정리</div>
+      <div class="fb-text"><strong>${escHtml(r.hint)}</strong></div>
+    </div>` : ''}
+  </div>
+</article>`;
+}
+
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function copyUrl() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    showToast('🔗 링크가 복사되었습니다! 패들렛에 붙여넣으세요.');
+  }).catch(() => {
+    prompt('아래 링크를 복사하세요:', window.location.href);
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
