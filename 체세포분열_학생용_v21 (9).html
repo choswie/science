@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디지털 현미경 관찰 보고서 v20</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .viewfinder { border: 2px solid #ef4444; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); z-index: 10; }
+        .step-content { display: none; }
+        .step-content.active { display: block; }
+        canvas { touch-action: none; cursor: move; }
+        .capture-target-active { border: 3px solid #3b82f6 !important; background-color: #eff6ff; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-8">
+
+<div class="max-w-5xl mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-200">
+    <h1 class="text-3xl font-black mb-8 text-slate-800 border-b pb-4">🔬 디지털 현미경 관찰 보고서 v20</h1>
+
+    <button id="backToModeBtn" onclick="goToModeSelect()" class="no-print hidden fixed top-4 right-4 md:top-6 md:right-6 z-30 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-lg">🏠 처음으로</button>
+
+    <div id="msgBox" class="hidden fixed top-5 left-1/2 transform -translate-x-1/2 z-50 px-6 py-4 bg-blue-600 text-white rounded-xl shadow-2xl font-bold text-lg animate-bounce"></div>
+
+    <!-- 진행 방식 선택 -->
+    <section id="step-mode" class="step-content active">
+        <h2 class="font-bold text-xl mb-4">진행 방식을 선택하세요</h2>
+        <p class="text-sm text-slate-500 mb-6">수업 목적에 맞게 두 가지 방식 중 하나를 선택할 수 있습니다.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button onclick="selectMode('full')" class="text-left p-6 border-2 border-blue-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition">
+                <div class="text-2xl mb-2">📘</div>
+                <div class="font-bold text-lg mb-1">전체 학습 모드</div>
+                <div class="text-sm text-slate-500">이론 학습 → 사진 조절 → 단계별 캡처 → 관찰 기록 → 최종 보고서</div>
+            </button>
+            <button onclick="selectMode('quick')" class="text-left p-6 border-2 border-green-200 rounded-2xl hover:border-green-500 hover:bg-green-50 transition">
+                <div class="text-2xl mb-2">🔬</div>
+                <div class="font-bold text-lg mb-1">수행평가 모드 (이론 생략)</div>
+                <div class="text-sm text-slate-500">이론 학습 단계를 생략하고, 관찰한 현미경 사진을 바로 첨부·캡처하여 보고서를 작성합니다.</div>
+            </button>
+        </div>
+    </section>
+
+    <!-- 0단계: 학생 정보 -->
+    <section id="step-0" class="step-content">
+        <h2 class="font-bold text-xl mb-4">시작단계: 학생 정보 입력</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <input type="text" id="std-grade" placeholder="학년" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-class" placeholder="반" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-num" placeholder="번호" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-name" placeholder="이름" class="p-3 rounded-xl border border-slate-300">
+        </div>
+        <button onclick="nextStep(1)" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"><span id="theory-step-btn-label">이론 학습 시작하기</span></button>
+    </section>
+
+    <!-- 1단계: 이론 학습 -->
+    <section id="step-1" class="step-content">
+        <h2 class="font-bold text-xl mb-4">1단계: 단계별 이론적 특징 정리</h2>
+        <table class="w-full border-collapse bg-white border">
+            <thead class="bg-slate-50"><tr><th class="p-3 border">단계</th><th class="p-3 border">이론적 특징 (2-3가지)</th></tr></thead>
+            <tbody id="theory-table"></tbody>
+        </table>
+        <div class="mt-6 flex justify-between">
+            <button onclick="nextStep(0)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(2)" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음: 사진 조절</button>
+        </div>
+    </section>
+
+    <!-- 2단계: 사진 조절 -->
+    <section id="step-2" class="step-content">
+        <h2 class="font-bold text-xl mb-4">2단계: 사진 조절</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(0, event)">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(1, event)">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(2, event)">
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 rounded-xl border items-center">
+            <button onclick="changeActiveCanvas(0)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 1</button>
+            <button onclick="changeActiveCanvas(1)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 2</button>
+            <button onclick="changeActiveCanvas(2)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 3</button>
+            <label class="ml-4 text-xs">회전: <input type="range" id="rot" min="-180" max="180" value="0" oninput="updateState()" class="w-16"></label>
+            <label class="text-xs">확대: <input type="range" id="zoom" min="0.1" max="5" step="0.1" value="1" oninput="updateState()" class="w-16"></label>
+            <label class="text-xs">박스: <input type="range" id="vfSize" min="50" max="300" value="150" oninput="updateViewfinder()" class="w-16"></label>
+        </div>
+
+        <div id="capture-action-area" class="hidden mb-4 p-4 bg-blue-100 rounded-xl border border-blue-300 text-center">
+            <p class="font-bold text-blue-800 mb-2" id="capture-instruction"></p>
+            <button id="do-capture-btn" onclick="executeCapture()" class="px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">현재 단계 캡처하기</button>
+        </div>
+
+        <div id="canvas-container" class="relative overflow-hidden border-4 border-slate-800 rounded-xl bg-black h-80 mb-6">
+            <canvas id="mainCanvas"></canvas>
+            <div id="viewfinder" class="viewfinder w-[150px] h-[150px]"></div>
+        </div>
+        
+        <div class="flex justify-between">
+            <button id="photoPrevBtn" onclick="prevFromPhotoStep()" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(3)" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">3단계로 이동</button>
+        </div>
+    </section>
+
+    <!-- 3단계: 사진 캡처 및 선택 -->
+    <section id="step-3" class="step-content">
+        <h2 class="font-bold text-xl mb-4">3단계: 각 단계별 사진 캡처</h2>
+        <div id="theory-ref-step3" class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-sm"></div>
+        
+        <p class="text-sm text-slate-500 mb-4">각 단계의 '사진 삽입' 영역을 클릭하여 캡처를 준비하세요.</p>
+        <table class="w-full border-collapse border">
+            <tbody id="capture-table"></tbody>
+        </table>
+        <div class="flex justify-between mt-6">
+            <button onclick="nextStep(2)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(4)" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음: 상세 관찰 기록</button>
+        </div>
+    </section>
+
+    <!-- 4단계: 관찰 기록 -->
+    <section id="step-4" class="step-content">
+        <h2 class="font-bold text-xl mb-4">4단계: 상세 관찰 내용 기록</h2>
+        <div id="observation-table-container"></div>
+        <div class="flex justify-between mt-6">
+            <button onclick="nextStep(3)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(5)" class="px-8 py-4 bg-green-600 text-white rounded-xl font-bold">최종 보고서 검토</button>
+        </div>
+    </section>
+
+    <!-- 5단계: 최종 보고서 -->
+    <section id="step-5" class="step-content">
+        <h2 class="font-bold text-xl mb-4">5단계: 최종 검토 및 제출</h2>
+        <div id="final-report" class="p-6 bg-white border shadow-sm"></div>
+        <div id="submit-status" class="mt-4 text-sm font-bold"></div>
+        <div class="flex justify-between mt-6 gap-3">
+            <button onclick="nextStep(4)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">수정하기</button>
+            <button onclick="window.print()" class="px-8 py-4 bg-slate-800 text-white rounded-xl font-bold">PDF 저장</button>
+            <button id="submit-btn" onclick="submitReport()" class="px-8 py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700">교사에게 제출하기</button>
+        </div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 mt-6 pt-4 border-t">개발자 kimmie kim</footer>
+</div>
+
+<script>
+    const stages = ['간기', '전기', '중기', '후기', '말기'];
+    let state = { observations: {}, captures: {}, imgStates: [ {img: null, rot: 0, zoom: 1, dx: 0, dy: 0}, {img: null, rot: 0, zoom: 1, dx: 0, dy: 0}, {img: null, rot: 0, zoom: 1, dx: 0, dy: 0} ], activeIdx: 0 };
+    let currentCaptureTarget = null;
+    let quickMode = false; // true = 수행평가 모드(이론 생략)
+
+    // ⚠ 교사용 대시보드로 제출 데이터를 전송할 Google Apps Script 웹앱 URL을 여기에 붙여넣으세요.
+    const SUBMIT_URL = 'https://script.google.com/macros/s/AKfycbwZ4yyUsHlcabN1o9vvE7DU75K-xgy7wIr_Ijw6iYCoNJBuGL5u22zlvRtHme9cHLRZ/exec';
+
+    function selectMode(m) {
+        quickMode = (m === 'quick');
+        document.getElementById('theory-step-btn-label').innerText = quickMode ? '사진 관찰 시작하기' : '이론 학습 시작하기';
+        document.getElementById('backToModeBtn').classList.remove('hidden');
+        nextStep(0);
+    }
+
+    function goToModeSelect() {
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        document.getElementById('step-mode').classList.add('active');
+        document.getElementById('backToModeBtn').classList.add('hidden');
+
+        // 새 학생이 이어서 사용할 수 있도록 학생 정보 입력을 완전히 초기화(잠금 해제)
+        ['std-grade', 'std-class', 'std-num', 'std-name'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.disabled = false;
+            el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+        });
+
+        // 이론 학습 입력 초기화
+        stages.forEach(s => {
+            const el = document.getElementById(`theory-${s}`);
+            if (el) el.value = '';
+        });
+
+        // 업로드한 사진/캡처/관찰기록 초기화
+        document.querySelectorAll('#step-2 input[type=file]').forEach(el => el.value = '');
+        state.observations = {};
+        state.captures = {};
+        state.imgStates = [
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 },
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 },
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 }
+        ];
+        state.activeIdx = 0;
+
+        // 제출 상태 메시지 및 버튼 초기화
+        const statusEl = document.getElementById('submit-status');
+        if (statusEl) statusEl.innerHTML = '';
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '교사에게 제출하기'; }
+    }
+    
+    // Init Tables
+    const theoryTbody = document.getElementById('theory-table');
+    const captureTbody = document.getElementById('capture-table');
+    
+    stages.forEach(s => {
+        theoryTbody.innerHTML += `<tr><td class="p-4 font-bold border w-32">${s}</td><td class="p-2 border"><textarea class="w-full h-16 p-2 border-none" id="theory-${s}"></textarea></td></tr>`;
+        captureTbody.innerHTML += `<tr class="border capture-row" id="row-${s}"><td class="p-4 font-bold border w-32">${s}</td><td class="p-2 border"><div id="cap-${s}" class="w-40 h-40 bg-slate-100 flex items-center justify-center cursor-pointer border rounded-lg hover:border-blue-500" onclick="prepareCapture('${s}')">사진 삽입</div></td></tr>`;
+    });
+
+    function showMsg(msg) {
+        const b = document.getElementById('msgBox');
+        b.innerText = msg;
+        b.classList.remove('hidden');
+        setTimeout(() => b.classList.add('hidden'), 3000);
+    }
+
+    function prepareCapture(stage) {
+        currentCaptureTarget = stage;
+        document.querySelectorAll('.capture-row').forEach(row => row.classList.remove('capture-target-active'));
+        document.getElementById(`row-${stage}`).classList.add('capture-target-active');
+        
+        document.getElementById('capture-action-area').classList.remove('hidden');
+        document.getElementById('capture-instruction').innerText = `현재 선택된 단계: [${stage}] - 2단계로 이동하여 사진을 조절한 뒤 [현재 단계 캡처하기] 버튼을 누르세요.`;
+        nextStep(2);
+    }
+
+    function executeCapture() {
+        if(!currentCaptureTarget) return;
+        if(!state.imgStates[state.activeIdx].img) { showMsg('사진을 먼저 업로드하세요!'); return; }
+        
+        const size = parseInt(document.getElementById('viewfinder').style.width) || 150;
+        const temp = document.createElement('canvas'); temp.width = size; temp.height = size;
+        temp.getContext('2d').drawImage(canvas, (canvas.width/2)-(size/2), (canvas.height/2)-(size/2), size, size, 0,0, size, size);
+        state.captures[currentCaptureTarget] = temp.toDataURL();
+        
+        document.getElementById('cap-'+currentCaptureTarget).innerHTML = `<img src="${state.captures[currentCaptureTarget]}" class="w-full h-full object-cover">`;
+        
+        currentCaptureTarget = null;
+        document.getElementById('capture-action-area').classList.add('hidden');
+        document.querySelectorAll('.capture-row').forEach(row => row.classList.remove('capture-target-active'));
+        showMsg('캡처 완료!');
+        nextStep(3);
+    }
+
+    function renderObservationTable() {
+        const container = document.getElementById('observation-table-container');
+        let html = `<table class="w-full border-collapse border"><thead class="bg-slate-50"><tr><th class="p-3 border">단계</th><th class="p-3 border">캡처 사진</th><th class="p-3 border">관찰 내용</th></tr></thead><tbody>`;
+        stages.forEach(s => {
+            html += `<tr class="border">
+                        <td class="p-4 font-bold border w-24">${s}</td>
+                        <td class="p-2 border">
+                            ${state.captures[s] ? `<img src="${state.captures[s]}" class="w-32 h-32 object-cover border rounded">` : '<span class="text-xs text-slate-400">사진 없음</span>'}
+                        </td>
+                        <td class="p-2 border">
+                            <textarea class="w-full h-32 p-2 border rounded" oninput="state.observations['${s}'] = this.value">${state.observations[s] || ''}</textarea>
+                        </td>
+                    </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    }
+
+    function lockStudentInfo() {
+        ['std-grade', 'std-class', 'std-num', 'std-name'].forEach(id => {
+            const el = document.getElementById(id);
+            el.disabled = true;
+            el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+        });
+    }
+
+    function nextStep(s) {
+        const activeEl = document.querySelector('.step-content.active');
+        const current = activeEl ? activeEl.id : '';
+
+        // 0단계(학생 정보)에서 넘어갈 때: 이름 확인 + 수행평가 모드면 이론 학습(1단계) 건너뛰기
+        if(current === 'step-0' && s === 1) {
+            const n = document.getElementById('std-name').value; if(!n) { showMsg('⚠ 학생 이름을 입력하세요!'); return; }
+            lockStudentInfo(); // 정보 입력 후에는 수정/재입력 불가 (다른 학생으로 바꿔치기 방지)
+            if(quickMode) { s = 2; }
+        }
+        if(s === 2 && !quickMode && current === 'step-1') {
+            let v = true; stages.forEach(st => { if(!document.getElementById(`theory-${st}`).value.trim()) v = false; }); 
+            if(!v) { showMsg('⚠ 경고: 이론적 특징을 모두 작성해주세요!'); return; } 
+        }
+        if(s === 3) {
+            const container = document.getElementById('theory-ref-step3');
+            if(quickMode) {
+                container.innerHTML = `<p class="text-slate-500">🔬 수행평가 모드: 이론 학습 단계를 생략했습니다. 관찰한 사진을 각 단계에 맞게 캡처해주세요.</p>`;
+            } else {
+                container.innerHTML = `<strong class="block mb-2 text-blue-800">1단계 이론 특징:</strong>`;
+                stages.forEach(s => container.innerHTML += `<p class="mb-1"><span class="font-bold">${s}:</span> ${document.getElementById(`theory-${s}`).value || '입력 없음'}</p>`);
+            }
+        }
+        if(s === 4) renderObservationTable();
+        
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`step-${s}`).classList.add('active');
+        if(s === 5) renderFinal();
+
+        // 2단계 화면의 "이전" 버튼: 개인정보 입력(0단계)으로는 절대 돌아갈 수 없도록 처리
+        const prevBtn = document.getElementById('photoPrevBtn');
+        if (prevBtn) {
+            if (quickMode) { prevBtn.style.visibility = 'hidden'; } // 수행평가 모드는 0단계 외에 이전 단계가 없음
+            else { prevBtn.style.visibility = 'visible'; }
+        }
+    }
+
+    // 2단계 화면의 "이전" 버튼: 전체학습 모드에서만 1단계(이론학습)로 이동, 0단계로는 절대 이동하지 않음
+    function prevFromPhotoStep() { if (!quickMode) nextStep(1); }
+
+    // Canvas Logic
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    // 원본 사진은 화질 그대로면 용량이 너무 커서(스마트폰 카메라 사진 등) 제출이 조용히 실패할 수 있어,
+    // 제출용으로는 긴 변 기준 1600px로 축소한 JPEG를 별도로 만들어 저장합니다.
+    // (자르기/회전 도구는 원본 해상도 그대로인 img를 계속 사용하므로 캡처 화질에는 영향 없음)
+    function makeSubmittableOriginal(img) {
+        const maxDim = 1600;
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        return c.toDataURL('image/jpeg', 0.85);
+    }
+
+    function handleFile(idx, e) { const reader = new FileReader(); reader.onload = ev => { const img = new Image(); img.onload = () => { state.imgStates[idx].img = img; state.imgStates[idx].original = makeSubmittableOriginal(img); drawCanvas(); }; img.src = ev.target.result; }; reader.readAsDataURL(e.target.files[0]); }
+    function drawCanvas() {
+        const st = state.imgStates[state.activeIdx];
+        if(!st.img) return;
+        canvas.width = document.getElementById('canvas-container').clientWidth;
+        canvas.height = document.getElementById('canvas-container').clientHeight;
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(canvas.width/2 + st.dx, canvas.height/2 + st.dy);
+        ctx.rotate(st.rot * Math.PI / 180);
+        ctx.scale(st.zoom, st.zoom);
+        ctx.drawImage(st.img, -st.img.width/2, -st.img.height/2);
+        ctx.restore();
+    }
+    
+    function updateState() { state.imgStates[state.activeIdx].rot = document.getElementById('rot').value; state.imgStates[state.activeIdx].zoom = document.getElementById('zoom').value; drawCanvas(); }
+    function updateViewfinder() { const s = document.getElementById('vfSize').value; document.getElementById('viewfinder').style.width = s + 'px'; document.getElementById('viewfinder').style.height = s + 'px'; }
+    function changeActiveCanvas(idx) { state.activeIdx = idx; drawCanvas(); }
+
+    let isDragging = false; let lastX = 0; let lastY = 0;
+    canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+    window.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mousemove', e => { if(!isDragging) return; state.imgStates[state.activeIdx].dx += (e.clientX - lastX); state.imgStates[state.activeIdx].dy += (e.clientY - lastY); lastX = e.clientX; lastY = e.clientY; drawCanvas(); });
+
+    function renderFinal() {
+        const div = document.getElementById('final-report');
+        const originalCount = state.imgStates.filter(s => s.original).length;
+        div.innerHTML = `<div class="mb-6 pb-4 border-b">학생: ${document.getElementById('std-grade').value}학년 ${document.getElementById('std-class').value}반 ${document.getElementById('std-num').value}번 ${document.getElementById('std-name').value}</div>
+            <div class="mb-6 p-3 rounded-lg ${originalCount > 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} text-sm font-bold">
+                📷 제출 시 함께 전송될 원본 사진: ${originalCount}장 ${originalCount === 0 ? '(2단계에서 파일을 업로드하지 않으면 원본 사진 없이 제출됩니다)' : ''}
+            </div>` + stages.map(s => `
+            <div class="border-b p-4 grid grid-cols-2 gap-4">
+                <div class="font-bold text-lg">${s}</div>
+                <div>${state.captures[s] ? `<img src="${state.captures[s]}" class="w-32 h-32 border">` : '사진 없음'}</div>
+                <div class="col-span-2 text-sm"><strong class="block">관찰 내용:</strong> ${state.observations[s] || '-'}</div>
+            </div>`).join('');
+    }
+    window.addEventListener('resize', drawCanvas);
+
+    // 교사용 대시보드로 제출
+    function submitReport() {
+        if(SUBMIT_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL') {
+            document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 주소(SUBMIT_URL)가 아직 설정되지 않았습니다. 선생님께 문의하세요.</span>';
+            return;
+        }
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true; btn.innerText = '제출 중...';
+        document.getElementById('submit-status').innerHTML = '<span class="text-slate-500">제출 중입니다. 잠시만 기다려주세요...</span>';
+
+        const payload = {
+            timestamp: new Date().toISOString(),
+            mode: quickMode ? '수행평가(이론생략)' : '전체학습',
+            grade: document.getElementById('std-grade').value,
+            class: document.getElementById('std-class').value,
+            num: document.getElementById('std-num').value,
+            name: document.getElementById('std-name').value,
+            observations: state.observations,
+            captures: state.captures, // { 간기: 'data:image/png;base64,...', ... }
+            originals: state.imgStates.map(s => s.original || null) // 학생이 업로드한 원본 사진 (최대 3장, 자르기/회전 전)
+        };
+
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Apps Script 웹앱 CORS 우회용
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false; btn.innerText = '교사에게 제출하기';
+            if(data && data.result === 'success') {
+                document.getElementById('submit-status').innerHTML = '<span class="text-green-600">✅ 제출이 완료되었습니다!</span>';
+                showMsg('제출 완료!');
+            } else {
+                document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 실패: ' + (data && data.message ? data.message : '알 수 없는 오류') + '</span>';
+            }
+        })
+        .catch(err => {
+            btn.disabled = false; btn.innerText = '교사에게 제출하기';
+            document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 중 오류가 발생했습니다. 인터넷 연결을 확인하세요.</span>';
+        });
+    }
+</script>
+</body>
+</html>
