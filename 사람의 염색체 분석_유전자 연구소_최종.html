@@ -418,7 +418,7 @@
             }
             container.innerHTML += `
                 <div class="drop-zone border-2 border-dashed border-indigo-300 rounded bg-indigo-50 col-span-2 md:col-span-1 lg:col-span-2" data-slot="sex">
-                    <span class="drop-zone-label text-indigo-700">Sex</span>
+                    <span class="drop-zone-label text-indigo-700">성 염색체</span>
                 </div>
             `;
         }
@@ -708,6 +708,10 @@
             'xyy': ['초남성', '야콥', 'xyy']
         };
 
+        // '정상' 케이스(case1, case5)는 단순 포함(includes) 검사 대신, 아래 목록과 정확히 일치할 때만 정답 처리합니다.
+        // (포함 검사만 쓰면 "비정상" 같은 오답도 '정상'이라는 글자를 포함한다는 이유로 정답 처리되는 문제가 있었습니다.)
+        const normalAcceptedAnswers = ['정상', '정상남성', '정상여성', '정상남자', '정상여자'];
+
         function submitDiagnosis() {
             const userReason = document.getElementById('diag-reason').value;
             const typedName = document.getElementById('diag-name-input').value.trim();
@@ -723,9 +727,13 @@
 
             const currentCase = karyotypeCases[currentCaseId];
             const keywords = diagKeywords[currentCase.ansName] || [];
-            
-            // 학생이 적은 진단명에 '다운', '터너' 등의 핵심 단어가 포함되어 있는지 검사 (띄어쓰기 무시)
-            const isNameCorrect = keywords.some(kw => typedName.replace(/\s+/g, '').toLowerCase().includes(kw));
+            const normalizedTypedName = typedName.replace(/\s+/g, '').toLowerCase();
+
+            // '정상' 케이스(case1, case5)는 정확히 일치하는 표현만 정답 처리 (정상 / 정상남성 / 정상여성 / 정상남자 / 정상여자)
+            // 그 외 케이스는 기존처럼 '다운', '터너' 등 핵심 단어가 포함되어 있는지 검사 (띄어쓰기 무시)
+            const isNameCorrect = currentCase.ansName === 'normal'
+                ? normalAcceptedAnswers.includes(normalizedTypedName)
+                : keywords.some(kw => normalizedTypedName.includes(kw));
 
             if(userReason === currentCase.ansReason && isNameCorrect) {
                 const mTitle = document.getElementById('modal-title');
