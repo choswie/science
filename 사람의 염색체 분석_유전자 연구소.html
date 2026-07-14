@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디지털 핵형 분석 및 진단 프로그램 (태블릿 지원)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .drop-zone {
+            transition: all 0.2s ease;
+            min-height: 120px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+            padding-bottom: 25px;
+            position: relative;
+        }
+        
+        .drop-zone.drag-over {
+            background-color: #eff6ff; 
+            border-color: #3b82f6; 
+            transform: scale(1.02);
+        }
+
+        .drop-zone-label {
+            position: absolute;
+            bottom: 4px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-weight: bold;
+            color: #6b7280; 
+            pointer-events: none; 
+        }
+
+        .chromosome-item {
+            cursor: grab;
+            transition: transform 0.1s;
+            position: relative;
+            padding: 2px;
+            border-radius: 4px;
+            z-index: 10;
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none; 
+        }
+
+        .chromosome-item:active {
+            cursor: grabbing;
+        }
+
+        .chromosome-item.dragging {
+            opacity: 0.7;
+            transform: scale(1.2) !important;
+            z-index: 9999 !important; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .is-correct { border: 2px solid #22c55e !important; background-color: #f0fdf4 !important; }
+        .is-wrong { border: 2px solid #ef4444 !important; background-color: #fef2f2 !important; }
+
+        #pool-zone {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            grid-auto-rows: 110px;
+            gap: 10px;
+            padding: 20px !important;
+            align-items: center;
+            justify-items: center;
+            align-content: start;
+        }
+
+        #pool-zone .chromosome-item {
+            position: relative;
+        }
+
+        #board-zone .chromosome-item {
+            position: relative;
+            transform: none !important; 
+            left: auto !important;
+            top: auto !important;
+        }
+
+        .chromosome-item svg, .chromosome-item span {
+            pointer-events: none;
+        }
+
+        @media print {
+            body { background-color: white !important; }
+            header, main, #result-modal, #start-modal { display: none !important; }
+            #print-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; padding: 0; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .page-break-inside-avoid { page-break-inside: avoid; }
+            .hint-label { display: none !important; }
+            #print-board-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; align-items: end; }
+            /* 인쇄 시 염색체가 삐뚤어지지 않고 꼿꼿하게 서도록 회전(transform) 완전 강제 해제 */
+            #print-board-container .chromosome-item { transform: none !important; left: auto !important; top: auto !important; }
+            .drop-zone { min-height: 80px; border: 1px dashed #cbd5e1 !important; background-color: #f8fafc !important; }
+        }
+        
+        #print-area { display: none; }
+
+        /* 만족도 조사 */
+        .satisfy-btn { flex: 1; min-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 10px 6px; cursor: pointer;
+            font-size: 11px; color: #64748b; transition: all .15s; }
+        .satisfy-btn:hover { border-color: #6366f1; color: #1e293b; }
+        .satisfy-btn.picked { border-color: #6366f1; background: #eef2ff; color: #4338ca; font-weight: 700; }
+        .satisfy-emoji { font-size: 22px; }
+
+        /* 개발자 크레딧 */
+        .dev-credit { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; color: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-100 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- 시작 화면 모달 (가장 먼저 표시됨) -->
+    <div id="start-modal" class="fixed inset-0 bg-slate-900 bg-opacity-90 flex justify-center items-center z-[100]">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl mx-4 border-t-8 border-indigo-600">
+            <div class="text-6xl mb-4">👨‍🔬👩‍🔬</div>
+            <h2 class="text-2xl md:text-3xl font-extrabold mb-2 text-indigo-900">유전학 연구소 시스템</h2>
+            <p class="text-gray-600 mb-6 text-sm md:text-base">핵형 분석 임무를 시작하기 전, 연구원 등록을 진행해 주세요.</p>
+
+            <!-- Step 1: 학교급 선택 -->
+            <div id="school-level-step">
+                <label class="block text-sm font-bold text-gray-700 mb-3">🏫 학교급을 선택하세요</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="selectSchoolLevel('elementary')" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 flex flex-col items-center gap-1">
+                        <span class="text-2xl">🎒</span>
+                        <span>초등학교</span>
+                    </button>
+                    <button onclick="selectSchoolLevel('middle')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 flex flex-col items-center gap-1">
+                        <span class="text-2xl">🏫</span>
+                        <span>중학교</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: 소속 및 이름 입력 (학교급 선택 후 표시) -->
+            <div id="student-info-step" class="hidden">
+                <div class="mb-4 text-left bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">📌 소속 및 이름 입력</label>
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">학년</label>
+                            <input type="number" id="start-grade" placeholder="2" min="1" max="6" inputmode="numeric"
+                                   class="w-full border-2 border-gray-300 rounded-lg p-3 text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-lg"
+                                   onkeypress="if(event.key==='Enter') startLab()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">반</label>
+                            <input type="number" id="start-class" placeholder="1" min="1" max="20" inputmode="numeric"
+                                   class="w-full border-2 border-gray-300 rounded-lg p-3 text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-lg"
+                                   onkeypress="if(event.key==='Enter') startLab()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">번호</label>
+                            <input type="number" id="start-number" placeholder="15" min="1" max="50" inputmode="numeric"
+                                   class="w-full border-2 border-gray-300 rounded-lg p-3 text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-lg"
+                                   onkeypress="if(event.key==='Enter') startLab()">
+                        </div>
+                    </div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">이름</label>
+                    <input type="text" id="start-name" placeholder="홍길동" 
+                           class="w-full border-2 border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-lg" 
+                           onkeypress="if(event.key==='Enter') startLab()">
+                    <p id="start-error" class="text-red-500 text-sm font-bold mt-2 hidden">❌ 학년, 반, 번호, 이름을 모두 입력해야 시스템에 접속할 수 있습니다.</p>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="backToSchoolLevel()" class="shrink-0 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-4 rounded-lg shadow transition-colors">
+                        ◀ 뒤로
+                    </button>
+                    <button onclick="startLab()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 flex justify-center items-center gap-2 text-lg">
+                        🚀 연구 시스템 접속
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-white shadow-md p-4 flex justify-between items-center z-10 shrink-0 flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+                🧬 핵형 분석 및 진단
+            </h1>
+            <!-- 로그인 시 입력한 이름 표시 영역 -->
+            <div class="hidden md:flex bg-indigo-50 text-indigo-800 px-3 py-1.5 rounded-full text-sm font-bold border border-indigo-200 items-center gap-1 shadow-sm">
+                <span class="text-xs">👤 연구원:</span> 
+                <span id="display-researcher-name" class="text-base text-indigo-900">대기중</span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3 flex-wrap">
+            <select id="case-selector" class="border border-gray-300 rounded p-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 font-medium text-sm md:text-base" onchange="loadCase()">
+                <option value="case1">CASE 1: 환자 A (건강검진 14세 남학생)</option>
+                <option value="case5">CASE 5: 환자 E (건강검진 13세 여학생)</option>
+                <option value="case2">CASE 2: 환자 B (심장 잡음 신생아)</option>
+                <option value="case6">CASE 6: 환자 F (집중치료실 신생아 여아)</option>
+                <option value="case7">CASE 7: 환자 G (다지증 신생아 남아)</option>
+                <option value="case3">CASE 3: 환자 C (저신장 15세 여학생)</option>
+                <option value="case4">CASE 4: 환자 D (가슴 발달 16세 남학생)</option>
+                <option value="case8">CASE 8: 환자 H (장신 17세 여학생)</option>
+                <option value="case9">CASE 9: 환자 I (성장 급진 18세 남학생)</option>
+            </select>
+            
+            <div id="difficulty-selector" class="bg-gray-100 p-2 rounded hidden lg:flex gap-4 border border-gray-200">
+                <label id="easy-difficulty-label" class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="difficulty" value="easy" onchange="changeDifficulty()" class="form-radio text-indigo-600 h-4 w-4">
+                    <span class="ml-2 text-sm font-medium">기본</span>
+                </label>
+                <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="difficulty" value="hard" checked onchange="changeDifficulty()" class="form-radio text-indigo-600 h-4 w-4">
+                    <span class="ml-2 text-sm font-medium text-red-600">심화</span>
+                </label>
+            </div>
+
+            <button onclick="checkResult()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow transition-colors flex items-center gap-2">
+                ✅ 진단하기
+            </button>
+            <button onclick="loadCase()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shadow transition-colors hidden sm:block">
+                🔄 초기화
+            </button>
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden flex-col md:flex-row">
+        
+        <section class="w-full md:w-1/3 bg-slate-200 border-b md:border-r border-slate-300 p-4 flex flex-col h-1/3 md:h-full">
+            <h2 class="font-bold text-lg text-slate-700 mb-2 border-b border-slate-300 pb-2 flex justify-between">
+                염색체 보관소 (Pool)
+                <span id="remaining-count" class="text-sm font-normal text-blue-600">남은 염색체: 46개</span>
+            </h2>
+            <div id="pool-zone" class="flex-1 relative overflow-auto drop-zone border-2 border-transparent">
+            </div>
+        </section>
+
+        <section class="w-full md:w-2/3 bg-white p-4 overflow-y-auto flex flex-col h-2/3 md:h-full" id="board-zone">
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded shadow-sm shrink-0">
+                <h3 class="font-bold text-blue-800 mb-1 flex items-center gap-2">
+                    📄 유전학 연구소 의뢰 파일
+                </h3>
+                <p id="scenario-text" class="text-gray-700 text-sm leading-relaxed"></p>
+            </div>
+
+            <h2 class="font-bold text-xl text-indigo-800 mb-4 text-center border-b pb-2 shrink-0">핵형 분석판</h2>
+            
+            <div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2 pb-10" id="slots-container">
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 화면용 개발자 크레딧 -->
+    <div class="dev-credit py-1.5 bg-slate-50 border-t border-slate-200 shrink-0">
+        <svg width="14" height="14" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+            <defs>
+                <linearGradient id="pageDevIconGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/>
+                </linearGradient>
+            </defs>
+            <path d="M16 4h8v8l8 14a4 4 0 01-3.5 6h-17A4 4 0 018 26l8-14V4z" fill="none" stroke="url(#pageDevIconGrad)" stroke-width="2" stroke-linejoin="round"/>
+            <line x1="14" y1="4" x2="26" y2="4" stroke="url(#pageDevIconGrad)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M20 27c-3-2.2-5-3.8-5-6a2.6 2.6 0 015-1.1A2.6 2.6 0 0125 21c0 2.2-2 3.8-5 6z" fill="url(#pageDevIconGrad)"/>
+        </svg>
+        <span>개발자: kimmie kim</span>
+    </div>
+
+    <!-- 모달 창 (진단서 제출 및 결과 확인) -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-start pt-4 md:pt-10 z-50 overflow-y-auto">
+        <div class="bg-white rounded-lg p-6 md:p-8 max-w-2xl w-full text-center shadow-2xl mb-10 mx-4">
+            <h2 id="modal-title" class="text-2xl md:text-3xl font-bold mb-4">결과</h2>
+            <p id="modal-msg" class="text-base md:text-lg text-gray-700 mb-6">메시지</p>
+            
+            <div id="diagnosis-form" class="hidden bg-gray-50 border border-gray-200 p-4 rounded text-left mb-6">
+                <h3 class="font-bold text-indigo-800 border-b pb-2 mb-3">📝 연구원 진단 보고서 작성</h3>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">1. 진단 근거 (염색체 이상 부위 찾기):</label>
+                    <select id="diag-reason" class="w-full border border-gray-300 rounded p-2 focus:ring-indigo-500 text-sm md:text-base" onchange="checkReasonSelection()">
+                        <option value="">[이상 부위를 선택하세요]</option>
+                        <option value="normal">염색체 수와 구조에 이상이 없음</option>
+                        <option value="trisomy21">상염색체 이상: 21번 염색체가 3개임</option>
+                        <option value="trisomy18">상염색체 이상: 18번 염색체가 3개임</option>
+                        <option value="trisomy13">상염색체 이상: 13번 염색체가 3개임</option>
+                        <option value="turner">성염색체 이상: X 염색체가 1개임</option>
+                        <option value="klinefelter">성염색체 이상: X 2개, Y 1개로 총 3개임</option>
+                        <option value="tripleX">성염색체 이상: X 염색체가 3개임</option>
+                        <option value="xyy">성염색체 이상: X 1개, Y 2개로 총 3개임</option>
+                    </select>
+                </div>
+                
+                <div id="step2-container" class="hidden mb-4 bg-yellow-50 p-3 border-l-4 border-yellow-400 rounded transition-all">
+                    <p class="text-sm font-bold text-yellow-800 mb-2">🔍 발견한 이상 부위를 바탕으로 인터넷을 검색하여 아래 항목을 직접 작성하세요! (복사/붙여넣기 금지)</p>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">2. 최종 진단명 (직접 타이핑):</label>
+                    <!-- onpaste="return false;" 를 통해 붙여넣기 차단 -->
+                    <input type="text" id="diag-name-input" placeholder="예: 다운 증후군" class="w-full border border-gray-300 rounded p-2 mb-3 focus:ring-indigo-500 text-sm md:text-base" onpaste="return false;" ondrop="return false;" autocomplete="off">
+                    
+                    <label class="block text-sm font-bold text-gray-700 mb-1">3. 환자의 주요 발현 특징 (직접 타이핑):</label>
+                    <!-- onpaste="return false;" 를 통해 붙여넣기 차단 -->
+                    <textarea id="diag-chars-input" rows="3" placeholder="인터넷에서 증상과 특징을 검색한 후 요약하여 직접 적어주세요." class="w-full border border-gray-300 rounded p-2 focus:ring-indigo-500 text-sm md:text-base" onpaste="return false;" ondrop="return false;" autocomplete="off"></textarea>
+                </div>
+                
+                <p id="diag-error" class="text-red-500 text-sm font-bold mt-3 hidden">❌ 진단 내용이 틀렸습니다. 다시 확인해 보세요!</p>
+            </div>
+
+            <div id="characteristics-panel" class="hidden bg-green-50 border border-green-200 p-5 rounded text-left mb-6">
+                <h3 class="font-bold text-green-800 border-b border-green-300 pb-2 mb-3 flex items-center gap-2">
+                    💡 작성한 특징 확인 및 모범 답안 비교
+                </h3>
+                <p id="characteristics-text" class="text-gray-800 text-sm md:text-base leading-relaxed"></p>
+            </div>
+
+            <div id="satisfaction-panel" class="hidden bg-indigo-50 border border-indigo-200 p-5 rounded text-left mb-6">
+                <h3 class="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">🙋 이 활동은 어떠셨나요? (제출 전 필수)</h3>
+                <div class="flex gap-2" id="satisfyRow">
+                    <div class="satisfy-btn" data-v="1" onclick="pickSatisfaction(1,this)"><span class="satisfy-emoji">😞</span><span>매우 불만족</span></div>
+                    <div class="satisfy-btn" data-v="2" onclick="pickSatisfaction(2,this)"><span class="satisfy-emoji">🙁</span><span>불만족</span></div>
+                    <div class="satisfy-btn" data-v="3" onclick="pickSatisfaction(3,this)"><span class="satisfy-emoji">😐</span><span>보통</span></div>
+                    <div class="satisfy-btn" data-v="4" onclick="pickSatisfaction(4,this)"><span class="satisfy-emoji">🙂</span><span>만족</span></div>
+                    <div class="satisfy-btn" data-v="5" onclick="pickSatisfaction(5,this)"><span class="satisfy-emoji">😄</span><span>매우 만족</span></div>
+                </div>
+            </div>
+
+            <div class="flex justify-center gap-3 flex-wrap">
+                <button id="btn-close" onclick="closeModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded">
+                    닫기
+                </button>
+                <button id="btn-submit" onclick="submitDiagnosis()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded">
+                    진단서 제출
+                </button>
+                <button id="btn-pdf" onclick="downloadPdf()" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded flex items-center gap-2">
+                    📥 보고서 PDF 다운로드
+                </button>
+                <button id="btn-teacher-submit" onclick="submitToTeacher()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded flex items-center gap-2">
+                    📤 선생님께 제출하기
+                </button>
+            </div>
+            <p id="submit-status" class="text-xs text-gray-500 mt-2"></p>
+        </div>
+    </div>
+
+    <!-- 숨겨진 인쇄용(PDF) 보고서 영역 -->
+    <div id="print-area">
+        <div class="max-w-4xl mx-auto p-10 bg-white border-2 border-gray-800">
+            <h1 class="text-4xl font-extrabold text-center mb-8 pb-4 border-b-4 border-gray-800">🔬 핵형 분석 및 진단 결과 보고서</h1>
+            
+            <div class="flex justify-between items-end mb-8 bg-gray-100 p-4 rounded-lg border border-gray-300">
+                <div class="text-lg">
+                    <p class="mb-2"><strong class="text-gray-600">의뢰 환자:</strong> <span id="print-patient" class="font-bold text-indigo-800"></span></p>
+                    <p><strong class="text-gray-600">작성 일자:</strong> <span id="print-date" class="font-bold"></span></p>
+                </div>
+                <div class="text-xl">
+                    <p><strong class="text-gray-600">연구원 (소속/이름):</strong> <span id="print-student" class="font-bold underline text-indigo-900"></span></p>
+                </div>
+            </div>
+
+            <div class="mb-8 page-break-inside-avoid">
+                <h2 class="text-2xl font-bold mb-4 bg-gray-800 text-white p-2 rounded">1. 환자 핵형 분석판 (Karyotype)</h2>
+                <div id="print-board" class="border-2 border-gray-400 p-6 rounded bg-white">
+                    <!-- 복제된 보드가 들어감 -->
+                </div>
+            </div>
+
+            <div class="mb-8 page-break-inside-avoid">
+                <h2 class="text-2xl font-bold mb-4 bg-gray-800 text-white p-2 rounded">2. 연구원 최종 진단 (Diagnosis)</h2>
+                <div class="border border-gray-300 p-6 rounded bg-blue-50 text-lg">
+                    <p class="mb-4"><strong class="text-blue-800">▶ 진단 근거 (이상 부위):</strong> <br><span id="print-reason" class="ml-4 font-medium text-gray-800"></span></p>
+                    <p><strong class="text-blue-800">▶ 최종 진단명:</strong> <br><span id="print-diagnosis" class="ml-4 font-bold text-2xl text-red-600"></span></p>
+                </div>
+            </div>
+
+            <div class="page-break-inside-avoid">
+                <h2 class="text-2xl font-bold mb-4 bg-gray-800 text-white p-2 rounded">3. 발현 특징 및 의학 정보</h2>
+                <div class="border border-gray-300 p-6 rounded bg-green-50">
+                    <p id="print-characteristics" class="text-base leading-relaxed text-gray-800"></p>
+                </div>
+            </div>
+            
+            <div class="mt-12 text-center text-gray-500 text-sm font-bold">
+                <p>본 보고서는 유전학 연구소(중학교 과학 탐구 활동) 디지털 진단 시스템을 통해 공식 작성되었습니다.</p>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-200 flex items-center justify-center gap-2 text-gray-400 text-xs">
+                <svg width="14" height="14" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="rptDevIconGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M16 4h8v8l8 14a4 4 0 01-3.5 6h-17A4 4 0 018 26l8-14V4z" fill="none" stroke="url(#rptDevIconGrad)" stroke-width="2" stroke-linejoin="round"/>
+                    <line x1="14" y1="4" x2="26" y2="4" stroke="url(#rptDevIconGrad)" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M20 27c-3-2.2-5-3.8-5-6a2.6 2.6 0 015-1.1A2.6 2.6 0 0125 21c0 2.2-2 3.8-5 6z" fill="url(#rptDevIconGrad)"/>
+                </svg>
+                <span>개발자: kimmie kim</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ══════════════════════════════════════════
+        // ⚙️ 교사 설정 (CONFIG)
+        // ══════════════════════════════════════════
+        const PROJECT_NAME = "핵형 분석 및 진단"; // 구글시트 탭 이름으로 사용됨
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzDH4Pqd0g5yEuLTT8CaEPUKhP4uuWqHFfhq6TXwaaogHonYO57eHsLefFo_lo4rJXj8Q/exec";
+
+        let researcherName = ""; // 전역 변수: 로그인한 학생 이름 저장
+        let stuGrade = "", stuClass = "", stuNumber = "", stuName = "";
+        let lastDiagnosis = null;    // 이번 케이스의 진단 결과 (제출/PDF에 사용)
+        let satisfactionScore = null;
+
+        const chrData = {
+            '1': { h: 100, c: 0.48, bands: ['D','L','M','L','D','L','D','M'] },
+            '2': { h: 95, c: 0.38, bands: ['M','L','D','L','M','L','D','L','D'] },
+            '3': { h: 88, c: 0.45, bands: ['L','D','L','M','D','L','M'] },
+            '4': { h: 84, c: 0.28, bands: ['M','L','D','M','L','D','L'] },
+            '5': { h: 80, c: 0.28, bands: ['D','L','M','L','D','L','M'] },
+            '6': { h: 76, c: 0.35, bands: ['L','M','L','D','L','D','L'] },
+            '7': { h: 72, c: 0.38, bands: ['D','L','M','L','D','L','M'] },
+            '8': { h: 68, c: 0.32, bands: ['M','L','D','L','D','L'] },
+            '9': { h: 64, c: 0.35, bands: ['L','D','L','M','L','D'] },
+            '10':{ h: 60, c: 0.32, bands: ['D','L','M','L','D','M'] },
+            '11':{ h: 58, c: 0.38, bands: ['M','L','D','L','M','D'] },
+            '12':{ h: 56, c: 0.28, bands: ['L','D','L','M','L'] },
+            '13':{ h: 48, c: 0.15, bands: ['L','D','L','M','D'] },
+            '14':{ h: 46, c: 0.15, bands: ['L','M','L','D','M'] },
+            '15':{ h: 44, c: 0.15, bands: ['L','D','L','M','D'] },
+            '16':{ h: 42, c: 0.40, bands: ['M','L','D','L'] },
+            '17':{ h: 40, c: 0.32, bands: ['D','L','M','L'] },
+            '18':{ h: 38, c: 0.25, bands: ['M','L','D','L'] },
+            '19':{ h: 32, c: 0.45, bands: ['L','D','L'] },
+            '20':{ h: 30, c: 0.45, bands: ['D','L','M'] },
+            '21':{ h: 28, c: 0.15, bands: ['L','D','M'] }, 
+            '22':{ h: 26, c: 0.15, bands: ['L','M','D'] }, 
+            'X': { h: 72, c: 0.38, bands: ['M','L','D','L','M','L','D'] },
+            'Y': { h: 24, c: 0.15, bands: ['L','D','M'] }
+        };
+
+        const karyotypeCases = {
+            'case1': { 
+                name: '정상 남성', autosomes: 2, sex: ['X', 'Y'], extra: {},
+                scenario: '최근 급격한 성장기를 겪고 있는 14세 남학생입니다. 건강상 특별한 이상 징후는 없습니다.',
+                ansReason: 'normal', ansName: 'normal',
+                characteristics: '<strong>▶ 정상:</strong> 신체 발달, 지능, 생식 능력 모두 정상적인 범주에 속합니다.'
+            },
+            'case5': { 
+                name: '정상 여성', autosomes: 2, sex: ['X', 'X'], extra: {},
+                scenario: '최근 중학교에 입학한 13세 여학생입니다. 특이 소견 없이 또래와 비슷하게 건강하게 성장하고 있습니다.',
+                ansReason: 'normal', ansName: 'normal',
+                characteristics: '<strong>▶ 정상:</strong> 신체 발달, 지능, 생식 능력 모두 정상적인 범주에 속합니다.'
+            },
+            'case2': { 
+                name: '다운 증후군', autosomes: 2, sex: ['X', 'X'], extra: { 21: 1 },
+                scenario: '태어난 지 3일 된 신생아입니다. 미세한 심장 잡음과 미간이 약간 넓고 눈꼬리가 올라간 얼굴 생김새가 관찰됩니다.',
+                ansReason: 'trisomy21', ansName: 'down',
+                characteristics: '<strong>▶ 다운 증후군:</strong> 지적 장애와 특유의 안면 특징(넓은 미간, 위로 치켜올라간 눈꼬리)을 가집니다. 삼체성 질환 중 가장 생존율이 높습니다.'
+            },
+            'case6': { 
+                name: '에드워드 증후군', autosomes: 2, sex: ['X', 'X'], extra: { 18: 1 },
+                scenario: '신생아 집중치료실에 입원 중인 여아입니다. 손가락이 겹쳐져 있는 독특한 쥔 손 모양과 심각한 심장 이상이 있습니다.',
+                ansReason: 'trisomy18', ansName: 'edwards',
+                characteristics: '<strong>▶ 에드워드 증후군:</strong> 18번 염색체가 3개인 질환입니다. 심한 발달 지연과 여러 장기의 기형으로 생존율이 매우 낮습니다.'
+            },
+            'case7': { 
+                name: '파타우 증후군', autosomes: 2, sex: ['X', 'Y'], extra: { 13: 1 },
+                scenario: '태어난 지 1주 된 남아입니다. 입술이 갈라져 있고 손가락이 6개인 다지증 소견이 있습니다.',
+                ansReason: 'trisomy13', ansName: 'patau',
+                characteristics: '<strong>▶ 파타우 증후군:</strong> 13번 염색체가 3개인 질환입니다. 심각한 중추신경계 이상 등 치명적인 결함을 동반합니다.'
+            },
+            'case3': { 
+                name: '터너 증후군', autosomes: 2, sex: ['X'], extra: {},
+                scenario: '키가 눈에 띄게 작은 15세 여학생입니다. 2차 성징 발달이 없어 성장 호르몬 치료 여부 결정을 위해 방문했습니다.',
+                ansReason: 'turner', ansName: 'turner',
+                characteristics: '<strong>▶ 터너 증후군:</strong> 여성의 성염색체가 1개(X)인 상태입니다. 저신장, 난소 기능 저하로 인한 불임이 특징입니다. 지능은 대체로 정상입니다.'
+            },
+            'case4': { 
+                name: '클라인펠터 증후군', autosomes: 2, sex: ['X', 'X', 'Y'], extra: {},
+                scenario: '팔다리가 유난히 긴 16세 남학생입니다. 가슴이 약간 발달하며 2차 성징이 더딘 편입니다.',
+                ansReason: 'klinefelter', ansName: 'klinefelter',
+                characteristics: '<strong>▶ 클라인펠터 증후군:</strong> 남성에게 X 염색체가 추가로 존재하는 상태(XXY)입니다. 평균보다 큰 키, 고환 발달 부전이 나타납니다.'
+            },
+            'case8': { 
+                name: '초여성 증후군', autosomes: 2, sex: ['X', 'X', 'X'], extra: {},
+                scenario: '키가 유난히 큰 17세 여학생입니다. 약간의 언어 발달 지연과 학습의 어려움을 겪고 있습니다.',
+                ansReason: 'tripleX', ansName: 'triplex',
+                characteristics: '<strong>▶ 초여성 증후군 (XXX):</strong> 외관상 일반 여성과 구분이 어렵고 생식 능력도 정상이나 약간의 학습 지연이 있을 수 있습니다.'
+            },
+            'case9': { 
+                name: '초남성 증후군', autosomes: 2, sex: ['X', 'Y', 'Y'], extra: {},
+                scenario: '심한 여드름 치료를 위해 방문한 18세 남학생입니다. 키가 매우 크고 성장 속도가 빠릅니다.',
+                ansReason: 'xyy', ansName: 'xyy',
+                characteristics: '<strong>▶ 초남성 증후군 (XYY):</strong> 외관상 일반 남성과 차이가 거의 없으며 키가 큽니다. 지능과 생식 능력은 정상 범주에 속합니다.'
+            }
+        };
+
+        let currentCaseId = '';
+        let schoolLevel = ''; // 'elementary' 또는 'middle'
+
+        function selectSchoolLevel(level) {
+            schoolLevel = level;
+            document.getElementById('school-level-step').classList.add('hidden');
+            document.getElementById('student-info-step').classList.remove('hidden');
+            document.getElementById('start-grade').focus();
+            applySchoolLevelRestrictions();
+        }
+
+        function backToSchoolLevel() {
+            document.getElementById('student-info-step').classList.add('hidden');
+            document.getElementById('school-level-step').classList.remove('hidden');
+        }
+
+        // 중학교 선택 시: '기본' 난이도 옵션을 아예 제공하지 않고 '심화'로 고정
+        function applySchoolLevelRestrictions() {
+            const easyLabel = document.getElementById('easy-difficulty-label');
+            const hardRadio = document.querySelector('input[name="difficulty"][value="hard"]');
+            const easyRadio = document.querySelector('input[name="difficulty"][value="easy"]');
+
+            if (schoolLevel === 'middle') {
+                if (easyLabel) easyLabel.classList.add('hidden');
+                if (hardRadio) hardRadio.checked = true;
+                if (easyRadio) easyRadio.disabled = true;
+            } else {
+                if (easyLabel) easyLabel.classList.remove('hidden');
+                if (easyRadio) easyRadio.disabled = false;
+            }
+            changeDifficulty();
+        }
+
+        function startLab() {
+            const grade = document.getElementById('start-grade').value.trim();
+            const classNum = document.getElementById('start-class').value.trim();
+            const number = document.getElementById('start-number').value.trim();
+            const name = document.getElementById('start-name').value.trim();
+            const errorMsg = document.getElementById('start-error');
+            
+            if(!grade || !classNum || !number || !name) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            errorMsg.classList.add('hidden');
+            
+            stuGrade = grade; stuClass = classNum; stuNumber = number; stuName = name;
+            researcherName = `${grade}학년 ${classNum}반 ${number}번 ${name}`;
+            document.getElementById('display-researcher-name').textContent = researcherName;
+            document.getElementById('start-modal').classList.add('hidden'); // 모달 닫기
+            
+            // 로그인 완료 후 보드 초기화
+            loadCase();
+        }
+
+        function initBoard() {
+            const container = document.getElementById('slots-container');
+            container.innerHTML = '';
+            for (let i = 1; i <= 22; i++) {
+                container.innerHTML += `
+                    <div class="drop-zone border-2 border-dashed border-gray-300 rounded bg-gray-50" data-slot="${i}">
+                        <span class="drop-zone-label">${i}</span>
+                    </div>
+                `;
+            }
+            container.innerHTML += `
+                <div class="drop-zone border-2 border-dashed border-indigo-300 rounded bg-indigo-50 col-span-2 md:col-span-1 lg:col-span-2" data-slot="sex">
+                    <span class="drop-zone-label text-indigo-700">성 염색체</span>
+                </div>
+            `;
+        }
+
+        function createChromosomeSVG(chrId) {
+            const data = chrData[chrId];
+            const h = data.h;
+            const c = data.c;
+            const bands = data.bands;
+            const w = 8, gap = 2, totalW = w * 2 + gap;
+            const uid = Math.random().toString(36).substr(2, 9);
+            const clipId = `clip-${uid}`;
+            const colorMap = { 'L': '#f1f5f9', 'M': '#94a3b8', 'D': '#334155' };
+            let bandElements = '';
+            const bandH = h / bands.length;
+            for(let i = 0; i < bands.length; i++) {
+                bandElements += `<rect y="${i * bandH}" width="${w}" height="${bandH + 0.5}" fill="${colorMap[bands[i]]}" />`;
+            }
+            const constrictionY = h * c;
+            const constrictionSVG = `<rect y="${constrictionY - 1}" width="${w}" height="2" fill="#ffffff" />`;
+            const chromatidSVG = (xOffset) => `
+                <g transform="translate(${xOffset}, 0)">
+                    <clipPath id="${clipId}-${xOffset}"><rect width="${w}" height="${h}" rx="4" /></clipPath>
+                    <g clip-path="url(#${clipId}-${xOffset})">${bandElements}${constrictionSVG}</g>
+                    <rect width="${w}" height="${h}" rx="4" fill="none" stroke="#475569" stroke-width="0.8"/>
+                </g>
+            `;
+            const centromereDot = `<circle cx="${w + gap/2}" cy="${constrictionY}" r="2.5" fill="#dc2626" stroke="#ffffff" stroke-width="0.5" />`;
+            return `<svg viewBox="-4 -4 ${totalW + 8} ${h + 8}" width="${totalW + 8}" height="${h + 8}">
+                        ${chromatidSVG(0)}${chromatidSVG(w + gap)}${centromereDot}
+                    </svg>`;
+        }
+
+        function loadCase() {
+            initBoard();
+            currentCaseId = document.getElementById('case-selector').value;
+            const currentCase = karyotypeCases[currentCaseId];
+            
+            document.getElementById('scenario-text').textContent = currentCase.scenario;
+
+            const pool = document.getElementById('pool-zone');
+            pool.innerHTML = '';
+            
+            let items = [];
+            for (let i = 1; i <= 22; i++) {
+                let count = currentCase.autosomes + (currentCase.extra[i] || 0);
+                for (let j = 0; j < count; j++) items.push(i.toString());
+            }
+            currentCase.sex.forEach(s => items.push(s));
+            
+            updateCount(items.length);
+
+            items.sort(() => Math.random() - 0.5);
+
+            let xHintShown = false; // X 염색체 힌트 부여 여부
+
+            items.forEach((id, index) => {
+                const el = document.createElement('div');
+                el.className = 'chromosome-item border border-transparent';
+                el.id = `chr_${index}_${id}`;
+                el.dataset.type = id; 
+
+                const rot = Math.floor(Math.random() * 360);
+                const translateX = Math.floor((Math.random() - 0.5) * 20); 
+                const translateY = Math.floor((Math.random() - 0.5) * 20); 
+                el.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rot}deg)`;
+
+                let extraHintStyle = 'text-gray-500 bg-white/80 border-gray-200'; 
+                let alwaysShowClass = '';
+                
+                // X 염색체 중 딱 하나만 무조건 번호 힌트 고정 (심화 모드 기준점 역할)
+                if (id === 'X' && !xHintShown) {
+                    alwaysShowClass = 'always-show-hint';
+                    extraHintStyle = 'text-red-600 bg-red-50 border-red-300'; 
+                    xHintShown = true;
+                }
+
+                const hintSpan = `<span class="hint-label ${alwaysShowClass} absolute bottom-0 right-[-10px] text-xs font-bold px-1 rounded shadow-sm border ${extraHintStyle}">${id}</span>`;
+                el.innerHTML = createChromosomeSVG(id) + hintSpan;
+                
+                el.addEventListener('pointerdown', onPointerDown);
+                pool.appendChild(el);
+            });
+
+            changeDifficulty();
+            document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('is-correct', 'is-wrong'));
+            document.getElementById('btn-pdf').classList.add('hidden'); // PDF 버튼 숨김
+        }
+
+        let draggedItem = null;
+        let shiftX = 0;
+        let shiftY = 0;
+        let currentDropZone = null;
+
+        function onPointerDown(e) {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            
+            draggedItem = e.currentTarget;
+            e.preventDefault(); 
+
+            const rect = draggedItem.getBoundingClientRect();
+            shiftX = e.clientX - rect.left;
+            shiftY = e.clientY - rect.top;
+
+            draggedItem.classList.add('dragging');
+            
+            draggedItem.style.position = 'fixed';
+            document.body.appendChild(draggedItem);
+
+            moveAt(e.clientX, e.clientY);
+
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            document.addEventListener('pointercancel', onPointerUp);
+        }
+
+        function moveAt(clientX, clientY) {
+            draggedItem.style.left = clientX - shiftX + 'px';
+            draggedItem.style.top = clientY - shiftY + 'px';
+        }
+
+        function onPointerMove(e) {
+            if (!draggedItem) return;
+            moveAt(e.clientX, e.clientY);
+
+            draggedItem.style.visibility = 'hidden'; 
+            let elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+            draggedItem.style.visibility = 'visible';
+
+            if (!elemBelow) return;
+
+            let targetZone = elemBelow.closest('.drop-zone');
+
+            if (currentDropZone !== targetZone) {
+                if (currentDropZone) currentDropZone.classList.remove('drag-over');
+                currentDropZone = targetZone;
+                if (currentDropZone) currentDropZone.classList.add('drag-over');
+            }
+        }
+
+        function onPointerUp(e) {
+            if (!draggedItem) return;
+
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+            document.removeEventListener('pointercancel', onPointerUp);
+
+            draggedItem.style.visibility = 'hidden';
+            let elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+            draggedItem.style.visibility = 'visible';
+
+            let targetZone = elemBelow ? elemBelow.closest('.drop-zone') : null;
+
+            draggedItem.classList.remove('dragging');
+            draggedItem.style.position = '';
+            draggedItem.style.left = '';
+            draggedItem.style.top = '';
+
+            if (targetZone) {
+                targetZone.appendChild(draggedItem); 
+                targetZone.classList.remove('is-correct', 'is-wrong');
+            } else {
+                document.getElementById('pool-zone').appendChild(draggedItem); 
+            }
+
+            if (currentDropZone) {
+                currentDropZone.classList.remove('drag-over');
+                currentDropZone = null;
+            }
+
+            draggedItem = null;
+            updateCount();
+        }
+
+        function updateCount(initialCount) {
+            const pool = document.getElementById('pool-zone');
+            const currentCount = initialCount !== undefined ? initialCount : pool.querySelectorAll('.chromosome-item').length;
+            document.getElementById('remaining-count').textContent = `남은 염색체: ${currentCount}개`;
+        }
+
+        function changeDifficulty() {
+            const diffInput = document.querySelector('input[name="difficulty"]:checked');
+            const isEasy = diffInput ? diffInput.value === 'easy' : false;
+            document.querySelectorAll('.hint-label').forEach(el => {
+                if (el.classList.contains('always-show-hint')) {
+                    el.style.display = 'block'; // 기준점 X염색체는 항상 보임
+                } else {
+                    el.style.display = isEasy ? 'block' : 'none';
+                }
+            });
+        }
+
+        function checkReasonSelection() {
+            const reason = document.getElementById('diag-reason').value;
+            const step2 = document.getElementById('step2-container');
+            const btnSubmit = document.getElementById('btn-submit');
+            
+            // 진단 근거를 선택해야만 2단계 작성 폼과 제출 버튼이 나타남
+            if (reason) {
+                step2.classList.remove('hidden');
+                btnSubmit.classList.remove('hidden');
+            } else {
+                step2.classList.add('hidden');
+                btnSubmit.classList.add('hidden');
+            }
+        }
+
+        function checkResult() {
+            const slots = document.querySelectorAll('#slots-container .drop-zone');
+            let allCorrect = true;
+
+            slots.forEach(slot => {
+                const targetType = slot.dataset.slot;
+                const items = slot.querySelectorAll('.chromosome-item');
+                if (items.length === 0) {
+                    slot.classList.remove('is-correct', 'is-wrong');
+                    return; 
+                }
+
+                let isSlotCorrect = true;
+                items.forEach(item => {
+                    const itemType = item.dataset.type;
+                    if (targetType === 'sex') {
+                        if (itemType !== 'X' && itemType !== 'Y') isSlotCorrect = false;
+                    } else {
+                        if (itemType !== targetType) isSlotCorrect = false;
+                    }
+                });
+
+                if (isSlotCorrect) {
+                    slot.classList.add('is-correct');
+                    slot.classList.remove('is-wrong');
+                } else {
+                    slot.classList.add('is-wrong');
+                    slot.classList.remove('is-correct');
+                    allCorrect = false;
+                }
+            });
+
+            const poolCount = document.getElementById('pool-zone').querySelectorAll('.chromosome-item').length;
+            const modal = document.getElementById('result-modal');
+            const mTitle = document.getElementById('modal-title');
+            const mMsg = document.getElementById('modal-msg');
+            const diagForm = document.getElementById('diagnosis-form');
+            const btnSubmit = document.getElementById('btn-submit');
+            const btnPdf = document.getElementById('btn-pdf');
+            const btnTeacherSubmit = document.getElementById('btn-teacher-submit');
+            const satisfyPanel = document.getElementById('satisfaction-panel');
+            const charPanel = document.getElementById('characteristics-panel');
+            const step2 = document.getElementById('step2-container');
+
+            diagForm.classList.add('hidden');
+            btnSubmit.classList.add('hidden');
+            btnPdf.classList.add('hidden');
+            btnTeacherSubmit.classList.add('hidden');
+            satisfyPanel.classList.add('hidden');
+            document.querySelectorAll('#satisfyRow .satisfy-btn').forEach(b => b.classList.remove('picked'));
+            satisfactionScore = null;
+            lastDiagnosis = null;
+            document.getElementById('submit-status').textContent = '';
+            if (step2) step2.classList.add('hidden');
+            charPanel.classList.add('hidden'); 
+            document.getElementById('diag-error').classList.add('hidden');
+            
+            // 입력값 초기화
+            document.getElementById('diag-reason').value = "";
+            if (document.getElementById('diag-name-input')) document.getElementById('diag-name-input').value = "";
+            if (document.getElementById('diag-chars-input')) document.getElementById('diag-chars-input').value = "";
+
+            if (poolCount > 0) {
+                mTitle.textContent = "아직 덜 끝났어요!";
+                mTitle.className = "text-2xl md:text-3xl font-bold mb-4 text-orange-600";
+                mMsg.innerHTML = `보관소에 아직 <strong>${poolCount}개</strong>의 염색체가 남아있습니다. 모두 배치한 후 확인해 주세요.`;
+            } else if (!allCorrect) {
+                mTitle.textContent = "아쉽습니다!";
+                mTitle.className = "text-2xl md:text-3xl font-bold mb-4 text-red-600";
+                mMsg.innerHTML = "붉은색으로 표시된 칸에 <strong class='text-red-600'>잘못된 염색체</strong>가 들어있습니다. 다시 확인해 보세요!";
+            } else {
+                mTitle.textContent = "염색체 배열 완료! 🔬";
+                mTitle.className = "text-2xl md:text-3xl font-bold mb-4 text-indigo-600";
+                mMsg.innerHTML = "배열은 완벽합니다. 이제 발견한 이상 부위를 선택하고, 인터넷 검색을 통해 <strong>최종 진단 보고서</strong>를 작성해 주세요.";
+                diagForm.classList.remove('hidden');
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // 학생이 타이핑한 이름이 정답인지 채점하기 위한 키워드 사전
+        const diagKeywords = {
+            'normal': ['정상'],
+            'down': ['다운'],
+            'edwards': ['에드워드'],
+            'patau': ['파타우'],
+            'turner': ['터너'],
+            'klinefelter': ['클라인펠터', '클라인팰터'],
+            'triplex': ['초여성', '트리플'],
+            'xyy': ['초남성', '야콥', 'xyy']
+        };
+
+        // '정상' 케이스(case1, case5)는 "비정상"과 헷갈리지 않도록 별도 로직으로 채점합니다.
+        // "정상"이라는 단어가 포함되어 있으면 정답으로 인정하되(정상/정상남성/정상 여성입니다/정상인 남성 등 표현 다양성 허용),
+        // "비정상"이 포함된 경우(에도 "정상"이 부분 문자열로 들어있으므로)는 명시적으로 오답 처리합니다.
+        function isNormalDiagnosis(normalizedTypedName) {
+            if (normalizedTypedName.includes('비정상')) return false;
+            return normalizedTypedName.includes('정상');
+        }
+
+        function submitDiagnosis() {
+            const userReason = document.getElementById('diag-reason').value;
+            const typedName = document.getElementById('diag-name-input').value.trim();
+            const typedChars = document.getElementById('diag-chars-input').value.trim();
+            const errorMsg = document.getElementById('diag-error');
+            
+            // 진단명과 특징이 짧게나마 모두 입력되었는지 확인 (복붙 방지 연계)
+            if(!userReason || !typedName || typedChars.length < 5) {
+                errorMsg.textContent = "❌ 진단 근거를 선택하고, 진단명과 특징을 직접 타이핑해 주세요.";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            const currentCase = karyotypeCases[currentCaseId];
+            const keywords = diagKeywords[currentCase.ansName] || [];
+            const normalizedTypedName = typedName.replace(/\s+/g, '').toLowerCase();
+
+            // '정상' 케이스(case1, case5)는 "정상"이 포함된 표현이면 정답 처리 (정상 / 정상남성 / 정상 여성입니다 / 정상인 남자 등)
+            // 그 외 케이스는 기존처럼 '다운', '터너' 등 핵심 단어가 포함되어 있는지 검사 (띄어쓰기 무시)
+            const isNameCorrect = currentCase.ansName === 'normal'
+                ? isNormalDiagnosis(normalizedTypedName)
+                : keywords.some(kw => normalizedTypedName.includes(kw));
+
+            if(userReason === currentCase.ansReason && isNameCorrect) {
+                const mTitle = document.getElementById('modal-title');
+                const mMsg = document.getElementById('modal-msg');
+                const diagForm = document.getElementById('diagnosis-form');
+                const btnSubmit = document.getElementById('btn-submit');
+                const btnPdf = document.getElementById('btn-pdf');
+                const btnTeacherSubmit = document.getElementById('btn-teacher-submit');
+                const satisfyPanel = document.getElementById('satisfaction-panel');
+                const charPanel = document.getElementById('characteristics-panel');
+                const charText = document.getElementById('characteristics-text');
+
+                diagForm.classList.add('hidden');
+                btnSubmit.classList.add('hidden');
+
+                mTitle.textContent = "정답입니다! 🎉";
+                mTitle.className = "text-2xl md:text-3xl font-bold mb-4 text-green-600";
+                mMsg.innerHTML = `검색과 분석을 완벽하게 하셨습니다!<br>이 환자의 정확한 진단명은 <strong class='text-indigo-700 text-xl md:text-2xl'>[${currentCase.name}]</strong> 입니다.`;
+                
+                // 모범 답안과 학생이 작성한 것 비교 안내
+                charText.innerHTML = currentCase.characteristics + "<br><br><span class='text-indigo-600 font-bold'>✓ 내가 직접 타이핑한 특징도 PDF 보고서에 함께 저장됩니다.</span>";
+                charPanel.classList.remove('hidden');
+                btnPdf.classList.remove('hidden');
+                btnTeacherSubmit.classList.remove('hidden');
+                satisfyPanel.classList.remove('hidden');
+
+                // 제출/PDF에 사용할 이번 케이스의 진단 데이터 저장
+                lastDiagnosis = {
+                    caseId: currentCaseId,
+                    caseName: currentCase.name,
+                    reason: userReason,
+                    reasonText: document.getElementById('diag-reason').options[
+                        Array.from(document.getElementById('diag-reason').options).findIndex(o=>o.value===userReason)
+                    ]?.text || userReason,
+                    typedName: typedName,
+                    typedChars: typedChars
+                };
+                
+            } else {
+                errorMsg.textContent = "❌ 진단 근거가 틀렸거나 진단명이 정확하지 않습니다. 인터넷에서 다시 검색해 보세요!";
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        // PDF 생성 (네이티브 인쇄 기능을 활용하여 품질 보존)
+        // 인쇄용 보고서 영역에 데이터를 채워 넣기 (다운로드/제출 공용)
+        function fillPrintArea() {
+            const caseDropText = document.getElementById('case-selector').options[document.getElementById('case-selector').selectedIndex].text;
+            const today = new Date();
+            const dateString = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
+
+            document.getElementById('print-student').textContent = researcherName;
+            document.getElementById('print-patient').textContent = caseDropText;
+            document.getElementById('print-date').textContent = dateString;
+            document.getElementById('print-reason').textContent = lastDiagnosis ? lastDiagnosis.reasonText : '';
+            document.getElementById('print-diagnosis').textContent = lastDiagnosis ? lastDiagnosis.typedName : '';
+            document.getElementById('print-characteristics').innerHTML = lastDiagnosis ? lastDiagnosis.typedChars.replace(/\n/g, '<br>') : '';
+
+            // 핵형 보드 그대로 복사
+            const originalBoard = document.getElementById('slots-container');
+            const boardClone = originalBoard.cloneNode(true);
+            boardClone.id = 'print-board-container';
+            boardClone.className = "grid grid-cols-5 gap-2";
+
+            const printBoard = document.getElementById('print-board');
+            printBoard.innerHTML = '';
+            printBoard.appendChild(boardClone);
+        }
+
+        // 파일명 규칙: 학년반번호이름_프로젝트명_날짜.pdf
+        function buildFileName() {
+            const now = new Date();
+            const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+            const safeProject = PROJECT_NAME.replace(/[\\/:*?"<>|]/g, '');
+            return `${stuGrade}학년${stuClass}반${stuNumber}번_${stuName}_${safeProject}_${ymd}.pdf`.replace(/\s+/g, '');
+        }
+
+        // print-area를 화면 밖에서 렌더링 후 캡처 → 캔버스 반환
+        async function capturePrintAreaCanvas() {
+            const area = document.getElementById('print-area');
+            const prevDisplay = area.style.display;
+            area.style.display = 'block';
+            area.style.position = 'fixed';
+            area.style.top = '0';
+            area.style.left = '-99999px';
+            area.style.background = '#ffffff';
+            area.style.zIndex = '-1';
+            await new Promise(r => setTimeout(r, 150));
+            const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+            area.style.display = prevDisplay;
+            area.style.position = '';
+            area.style.top = '';
+            area.style.left = '';
+            area.style.zIndex = '';
+            return canvas;
+        }
+
+        // 캔버스 → 여러 페이지 A4 PDF 객체 생성 (jsPDF)
+        function canvasToPdf(canvas) {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+            const imgW = pageW;
+            const imgH = canvas.height * imgW / canvas.width;
+            const imgData = canvas.toDataURL('image/png');
+            let heightLeft = imgH, position = 0;
+            pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+            heightLeft -= pageH;
+            while (heightLeft > 0) {
+                position = heightLeft - imgH;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+                heightLeft -= pageH;
+            }
+            return pdf;
+        }
+
+        // 📄 학생용: PDF 다운로드 (실제 파일로 저장)
+        async function downloadPdf() {
+            const btn = document.getElementById('btn-pdf');
+            const origLabel = btn.innerHTML;
+            btn.disabled = true; btn.innerHTML = '⏳ PDF 생성 중...';
+            try {
+                fillPrintArea();
+                const canvas = await capturePrintAreaCanvas();
+                const pdf = canvasToPdf(canvas);
+                pdf.save(buildFileName());
+            } catch (err) {
+                alert('PDF 생성 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                btn.disabled = false; btn.innerHTML = origLabel;
+            }
+        }
+
+        // 만족도 선택 (5점 척도)
+        function pickSatisfaction(v, el) {
+            satisfactionScore = v;
+            document.querySelectorAll('#satisfyRow .satisfy-btn').forEach(b => b.classList.remove('picked'));
+            el.classList.add('picked');
+        }
+
+        // 📤 교사에게 제출: 구글 앱스 스크립트 웹앱으로 전송
+        async function submitToTeacher() {
+            const statusEl = document.getElementById('submit-status');
+            if (satisfactionScore == null) {
+                alert('제출하기 전에 활동 만족도(5점 척도)를 선택해주세요.');
+                document.getElementById('satisfaction-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            if (!GAS_WEB_APP_URL) {
+                statusEl.textContent = '⚠ 제출 주소가 설정되지 않았습니다. 선생님께 문의하세요.';
+                statusEl.className = 'text-xs text-red-500 mt-2';
+                return;
+            }
+            const btn = document.getElementById('btn-teacher-submit');
+            const origLabel = btn.innerHTML;
+            btn.disabled = true; btn.innerHTML = '⏳ 제출 중...';
+            statusEl.textContent = '보고서를 생성하고 있습니다...';
+            statusEl.className = 'text-xs text-gray-500 mt-2';
+            try {
+                fillPrintArea();
+                const canvas = await capturePrintAreaCanvas();
+                const pdf = canvasToPdf(canvas);
+                const pdfBase64 = pdf.output('datauristring');
+
+                const modeLabel = `${schoolLevel === 'middle' ? '중학교' : '초등학교'} · ${document.querySelector('input[name="difficulty"]:checked')?.value === 'hard' ? '심화' : '기본'}`;
+
+                const payload = {
+                    project: PROJECT_NAME,
+                    grade: stuGrade, cls: stuClass, number: stuNumber, name: stuName,
+                    timestamp: new Date().toISOString(),
+                    mode: modeLabel,
+                    resultType: lastDiagnosis ? `${lastDiagnosis.caseName} (${lastDiagnosis.reasonText})` : '',
+                    detail: lastDiagnosis ? lastDiagnosis.typedName : '',
+                    descVal: lastDiagnosis ? lastDiagnosis.typedChars : '',
+                    descScorePct: 100,
+                    satisfaction: satisfactionScore,
+                    checked: true,
+                    fileName: buildFileName(),
+                    pdfBase64
+                };
+
+                statusEl.textContent = '선생님께 전송하고 있습니다...';
+                const res = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({ result: 'ok' }));
+                if (data && data.result === 'error') throw new Error(data.message || '서버에서 오류가 발생했습니다.');
+
+                statusEl.textContent = '✅ 제출 완료! 선생님 구글시트에 기록되었습니다.';
+                statusEl.className = 'text-xs text-emerald-600 font-bold mt-2';
+            } catch (err) {
+                statusEl.textContent = '❌ 제출 실패: ' + err.message + ' (인터넷 연결 및 선생님 설정을 확인해 주세요)';
+                statusEl.className = 'text-xs text-red-500 mt-2';
+            } finally {
+                btn.disabled = false; btn.innerHTML = origLabel;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('result-modal').classList.add('hidden');
+            document.getElementById('satisfaction-panel').classList.add('hidden');
+            document.getElementById('btn-teacher-submit').classList.add('hidden');
+            document.querySelectorAll('#satisfyRow .satisfy-btn').forEach(b => b.classList.remove('picked'));
+            satisfactionScore = null;
+            document.getElementById('submit-status').textContent = '';
+        }
+
+        // 시작 시 초기화 함수는 제외하고, 껍데기만 렌더링 유지 (모달이 띄워짐)
+        window.onload = function() {
+            // 모달이 자동으로 떠 있으므로 대기
+        };
+    </script>
+</body>
+</html>
