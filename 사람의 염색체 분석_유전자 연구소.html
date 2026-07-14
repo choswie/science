@@ -957,6 +957,23 @@
             boardClone.id = 'print-board-container';
             boardClone.className = "grid grid-cols-5 gap-2";
 
+            // PDF는 html2canvas로 캡처하므로 @media print 스타일이 적용되지 않는다.
+            // 그래서 드래그 배치 시 부여됐던 회전/절대좌표 인라인 스타일을 여기서 직접 초기화해
+            // 염색체가 삐뚤어지지 않고 꼿꼿하게 서 있는 상태로 보고서에 나오도록 한다.
+            boardClone.querySelectorAll('.chromosome-item').forEach(item => {
+                item.style.transform = 'none';
+                item.style.left = 'auto';
+                item.style.top = 'auto';
+                item.style.position = 'relative';
+                item.style.margin = '0 2px';
+            });
+            boardClone.querySelectorAll('.drop-zone').forEach(zone => {
+                zone.style.display = 'flex';
+                zone.style.flexWrap = 'nowrap';
+                zone.style.alignItems = 'flex-end';
+                zone.style.justifyContent = 'center';
+            });
+
             const printBoard = document.getElementById('print-board');
             printBoard.innerHTML = '';
             printBoard.appendChild(boardClone);
