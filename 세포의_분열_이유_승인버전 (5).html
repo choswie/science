@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>세포의 분열 이유 - 실험 보고서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --cream:#F6F1E7;
+    --ink:#2B2B26;
+    --teal:#2A6F6F;
+    --teal-dark:#1D4F4F;
+    --amber:#D9A441;
+    --terracotta:#C4623A;
+    --card:#FFFFFF;
+    --line:#E4DCC9;
+    --shadow: 0 8px 24px rgba(43,43,38,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans KR',sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    line-height:1.6;
+  }
+  .wrap{max-width:720px;margin:0 auto;padding:28px 20px 80px;}
+  h1,h2,h3{font-family:'Gowun Batang',serif;margin:0 0 6px;}
+  .eyebrow{
+    font-size:12px;letter-spacing:2px;color:var(--teal);
+    font-weight:700;text-transform:uppercase;margin-bottom:6px;
+  }
+  .title-block{margin-bottom:24px;border-bottom:3px solid var(--amber);padding-bottom:16px;}
+  .title-block h1{font-size:28px;color:var(--teal-dark);}
+  .subtitle{color:#6b6b60;font-size:14px;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+    margin-bottom:18px;
+    box-shadow:var(--shadow);
+  }
+  .card h2{font-size:18px;color:var(--teal-dark);display:flex;align-items:center;gap:8px;}
+  .badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:50%;
+    background:var(--terracotta);color:#fff;font-size:13px;font-weight:700;
+    font-family:'Noto Sans KR';flex-shrink:0;
+  }
+  label{display:block;font-size:14px;font-weight:500;margin:14px 0 6px;color:#3d3d35;}
+  input[type=text], input[type=number], select, textarea{
+    width:100%;padding:11px 12px;border:1.5px solid var(--line);
+    border-radius:8px;font-family:inherit;font-size:14px;background:#FBF9F3;
+    transition:border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus{outline:none;border-color:var(--teal);background:#fff;}
+  textarea{min-height:80px;resize:vertical;}
+  .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr;gap:10px;}
+  .note{
+    background:#FBEFE3;border-left:4px solid var(--amber);
+    padding:10px 14px;border-radius:6px;font-size:13px;color:#6b4f22;margin:10px 0;
+  }
+  .caution{
+    background:#FBE9E2;border-left:4px solid var(--terracotta);
+    padding:10px 14px;border-radius:6px;font-size:13px;color:#7a3a24;margin:10px 0;
+  }
+  .process-illustration{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0 16px;
+  }
+  .illus-panel{
+    border:1px solid var(--line);border-radius:10px;background:#FBF9F3;
+    padding:8px 6px 10px;text-align:center;
+  }
+  .illus-panel svg{width:100%;height:auto;display:block;}
+  .illus-cap{font-size:11.5px;color:#6b6b5c;margin-top:4px;font-weight:500;}
+  @media (max-width:560px){.process-illustration{grid-template-columns:1fr;}}
+  .btn{
+    appearance:none;border:none;cursor:pointer;
+    padding:13px 22px;border-radius:10px;font-size:15px;font-weight:700;
+    font-family:'Noto Sans KR';transition:transform .1s, opacity .15s;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn-primary{background:var(--teal);color:#fff;width:100%;}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-ghost{background:transparent;color:var(--teal);border:1.5px solid var(--teal);}
+  .group-choice{display:flex;gap:10px;margin-top:8px;}
+  .group-choice label{
+    flex:1;margin:0;display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--line);border-radius:10px;padding:14px 8px;
+    cursor:pointer;font-weight:700;text-align:center;font-size:14px;
+  }
+  .group-choice input{display:none;}
+  .group-choice input:checked + span{color:var(--teal);}
+  .group-choice label.active{border-color:var(--teal);background:#EAF3F2;}
+  .photo-slot{
+    border:2px dashed var(--line);border-radius:10px;padding:16px;
+    text-align:center;margin-top:8px;cursor:pointer;background:#FBF9F3;
+  }
+  .photo-slot img{max-width:100%;border-radius:8px;margin-top:8px;}
+  .photo-slot input{display:none;}
+  .scale{display:flex;justify-content:space-between;gap:6px;margin-top:8px;}
+  .scale label{
+    flex:1;margin:0;text-align:center;border:1.5px solid var(--line);
+    border-radius:8px;padding:10px 4px;cursor:pointer;font-size:13px;font-weight:500;
+  }
+  .scale input{display:none;}
+  .scale label.active{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .spinner{
+    width:44px;height:44px;border:4px solid var(--line);border-top-color:var(--teal);
+    border-radius:50%;animation:spin 1s linear infinite;margin:24px auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .center{text-align:center;}
+  footer{
+    text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid var(--line);
+    font-size:12px;color:#9a9a8c;display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .error-msg{color:var(--terracotta);font-size:13px;margin-top:6px;display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="title-block">
+    <div class="eyebrow">과학 실험 보고서 · 확산과 표면적</div>
+    <h1>세포의 분열 이유</h1>
+    <div class="subtitle">한천 조각의 크기에 따른 물질 확산 속도 비교 실험</div>
+  </div>
+
+  <!-- 1. 시작 화면 -->
+  <div id="screen-start" class="screen active">
+    <div class="card">
+      <h2>학생 정보</h2>
+      <div class="grid4">
+        <div><label>학년</label><input type="number" id="s-grade" placeholder="3"></div>
+        <div><label>반</label><input type="number" id="s-class" placeholder="1"></div>
+        <div><label>번호</label><input type="number" id="s-number" placeholder="12"></div>
+        <div><label>이름</label><input type="text" id="s-name" placeholder="홍길동"></div>
+      </div>
+      <label>프로젝트명</label>
+      <input type="text" value="세포의 분열 이유" disabled>
+
+      <label>우리 조는?</label>
+      <div class="group-choice">
+        <label id="lbl-A"><input type="radio" name="group" value="A"><span>A조 (페놀프탈레인 용액)</span></label>
+        <label id="lbl-B"><input type="radio" name="group" value="B"><span>B조 (BTB 용액)</span></label>
+      </div>
+      <div class="error-msg" id="start-error">모든 항목을 입력해주세요.</div>
+      <br>
+      <button class="btn btn-primary" onclick="goToWaiting()">제출 준비 시작하기</button>
+    </div>
+  </div>
+
+  <!-- 2. 승인 대기 화면 -->
+  <div id="screen-waiting" class="screen">
+    <div class="card center">
+      <h2>선생님 승인 대기 중</h2>
+      <div class="spinner" id="waiting-spinner"></div>
+      <p id="waiting-status-text">선생님께 접속 요청을 보내는 중...</p>
+      <button class="btn btn-ghost" id="waiting-retry-btn" style="display:none;" onclick="requestTeacherApproval()">🔄 다시 요청하기</button>
+    </div>
+  </div>
+
+  <!-- 3. 실험 안내 및 입력 -->
+  <div id="screen-experiment" class="screen">
+    <div class="card">
+      <h2><span class="badge">목표</span></h2>
+      <textarea id="e-goal" placeholder="이 실험을 통해 알아보고자 하는 것을 적어보세요." onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>준비물</h2>
+      <p>식초, 500mL 비커, 안전 면도날, 눈금자, 종이수건, 비닐 장갑, 종이 호일</p>
+      <label>우리 조(<span id="group-label-1"></span>)의 준비물 확인</label>
+      <textarea id="e-materials" placeholder="우리 조가 실제로 사용한 준비물을 적어보세요." onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>실험 과정</h2>
+
+      <div class="process-illustration">
+        <div class="illus-panel">
+          <svg viewBox="0 0 240 160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="cTop" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#fbfbfb"/><stop offset="100%" stop-color="#dcdcdc"/>
+              </linearGradient>
+              <linearGradient id="cFront" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#d6d6d6"/><stop offset="100%" stop-color="#b0b0b0"/>
+              </linearGradient>
+              <linearGradient id="cSide" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#a8a8a8"/><stop offset="100%" stop-color="#828282"/>
+              </linearGradient>
+              <radialGradient id="cShadow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#000" stop-opacity="0.28"/>
+                <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <ellipse cx="30" cy="140" rx="20" ry="5" fill="url(#cShadow)"/>
+            <ellipse cx="88" cy="146" rx="26" ry="6" fill="url(#cShadow)"/>
+            <ellipse cx="168" cy="150" rx="38" ry="8" fill="url(#cShadow)"/>
+
+            <polygon points="16,132 34,132 34,114 16,114" fill="url(#cFront)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="16,114 34,114 41,107 24,107" fill="url(#cTop)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="34,132 34,114 41,107 41,125" fill="url(#cSide)" stroke="#8f8f8f" stroke-width="0.8"/>
+
+            <polygon points="66,138 96,138 96,109 66,109" fill="url(#cFront)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="66,109 96,109 107,98 77,98" fill="url(#cTop)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="96,138 96,109 107,98 107,127" fill="url(#cSide)" stroke="#8f8f8f" stroke-width="0.8"/>
+
+            <polygon points="128,143 178,143 178,96 128,96" fill="url(#cFront)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="128,96 178,96 197,77 147,77" fill="url(#cTop)" stroke="#8f8f8f" stroke-width="0.8"/>
+            <polygon points="178,143 178,96 197,77 197,124" fill="url(#cSide)" stroke="#8f8f8f" stroke-width="0.8"/>
+
+            <text x="25" y="152" font-size="11" fill="#3d3d35" text-anchor="middle" font-family="sans-serif">1cm</text>
+            <text x="86" y="153" font-size="11" fill="#3d3d35" text-anchor="middle" font-family="sans-serif">2cm</text>
+            <text x="162" y="20" font-size="11" fill="#3d3d35" text-anchor="middle" font-family="sans-serif">3cm</text>
+          </svg>
+          <div class="illus-cap">① 한천 조각 3종(1·2·3cm) 준비</div>
+        </div>
+
+        <div class="illus-panel">
+          <svg viewBox="0 0 240 160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#eef6f5" stop-opacity="0.9"/>
+                <stop offset="50%" stop-color="#ffffff" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#dbe9e7" stop-opacity="0.9"/>
+              </linearGradient>
+              <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#f3c9dd"/><stop offset="100%" stop-color="#e888b4"/>
+              </linearGradient>
+              <linearGradient id="stream" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#dff0ee" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#bfe0dd" stop-opacity="0.6"/>
+              </linearGradient>
+              <linearGradient id="glove" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#dcdcdc"/>
+              </linearGradient>
+            </defs>
+
+            <!-- 큰 비커 -->
+            <path d="M42 78 L42 132 Q42 140 50 140 L104 140 Q112 140 112 132 L112 78"
+                  fill="url(#glass)" stroke="#7fa8a5" stroke-width="2"/>
+            <path d="M50 138 Q78 132 104 138 L104 116 Q78 122 50 116 Z" fill="url(#liquid)"/>
+            <rect x="60" y="112" width="14" height="14" rx="2" fill="#e8639f" stroke="#c24c82" stroke-width="0.8"/>
+            <rect x="78" y="118" width="12" height="12" rx="2" fill="#e8639f" stroke="#c24c82" stroke-width="0.8"/>
+            <line x1="44" y1="90" x2="50" y2="90" stroke="#7fa8a5" stroke-width="1"/>
+            <line x1="44" y1="104" x2="50" y2="104" stroke="#7fa8a5" stroke-width="1"/>
+
+            <!-- 붓는 작은 비커 -->
+            <path d="M118 26 L150 26 L146 58 Q145 64 138 64 L130 64 Q123 64 122 58 Z"
+                  fill="url(#glass)" stroke="#7fa8a5" stroke-width="1.6"/>
+            <path d="M124 44 Q134 50 144 44 L143 55 Q134 60 125 55 Z" fill="url(#liquid)" opacity="0.85"/>
+
+            <!-- 붓는 물줄기 -->
+            <path d="M120 58 Q108 76 96 96 Q90 106 88 116" stroke="url(#stream)" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+            <!-- 장갑 낀 손 -->
+            <g>
+              <path d="M148 20 Q158 8 168 14 L214 46 Q222 51 218 60 Q214 68 205 64 L172 44 L150 34 Z"
+                    fill="url(#glove)" stroke="#b9b9b9" stroke-width="1.2"/>
+              <path d="M150 26 L134 22 Q128 20 128 27 L129 33 Q130 38 137 37 L152 34" fill="url(#glove)" stroke="#b9b9b9" stroke-width="1"/>
+            </g>
+
+            <text x="150" y="86" font-size="11" fill="#7a3a24" font-family="sans-serif">식초</text>
+            <line x1="146" y1="80" x2="130" y2="68" stroke="#c4623a" stroke-width="1"/>
+          </svg>
+          <div class="illus-cap">② 식초 용액에 담그기</div>
+        </div>
+
+        <div class="illus-panel">
+          <svg viewBox="0 0 240 160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="agarBig" cx="35%" cy="30%" r="80%">
+                <stop offset="0%" stop-color="#ff9dc6"/>
+                <stop offset="55%" stop-color="#ec5b9a"/>
+                <stop offset="100%" stop-color="#c72f76"/>
+              </radialGradient>
+              <radialGradient id="agarSmall" cx="35%" cy="30%" r="80%">
+                <stop offset="0%" stop-color="#ffb4d3"/>
+                <stop offset="60%" stop-color="#f070a8"/>
+                <stop offset="100%" stop-color="#d43d82"/>
+              </radialGradient>
+              <linearGradient id="blade" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#f2f5f4"/>
+                <stop offset="50%" stop-color="#c9d3d1"/>
+                <stop offset="100%" stop-color="#8fa19e"/>
+              </linearGradient>
+              <radialGradient id="agarShadow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#000" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <ellipse cx="80" cy="146" rx="46" ry="8" fill="url(#agarShadow)"/>
+            <ellipse cx="185" cy="140" rx="24" ry="6" fill="url(#agarShadow)"/>
+
+            <!-- 큰 한천 조각 (자르는 중) -->
+            <rect x="40" y="70" width="80" height="70" rx="4" fill="url(#agarBig)"/>
+            <rect x="40" y="70" width="80" height="70" rx="4" fill="none" stroke="#a8265e" stroke-width="1"/>
+            <ellipse cx="62" cy="86" rx="14" ry="7" fill="#ffffff" opacity="0.25"/>
+            <!-- 흰 안쪽(중심부 안 물듦) -->
+            <rect x="66" y="96" width="28" height="28" rx="2" fill="#fdfdfb" opacity="0.9"/>
+
+            <!-- 면도날/칼 -->
+            <path d="M20 46 L100 76 L96 86 L16 58 Z" fill="url(#blade)" stroke="#7c908d" stroke-width="1"/>
+            <path d="M20 46 L100 76 L98 80 L18 51 Z" fill="#ffffff" opacity="0.4"/>
+
+            <!-- 작은 한천 조각 -->
+            <rect x="172" y="112" width="36" height="34" rx="3" fill="url(#agarSmall)"/>
+            <rect x="172" y="112" width="36" height="34" rx="3" fill="none" stroke="#a8265e" stroke-width="1"/>
+            <ellipse cx="182" cy="120" rx="7" ry="4" fill="#ffffff" opacity="0.3"/>
+
+            <text x="80" y="153" font-size="10" text-anchor="middle" fill="#3d3d35" font-family="sans-serif">큰 조각: 중심부 안 물듦</text>
+            <text x="190" y="153" font-size="10" text-anchor="middle" fill="#3d3d35" font-family="sans-serif">작은 조각: 전체 물듦</text>
+          </svg>
+          <div class="illus-cap">③ 가운데를 잘라 확산 정도 비교</div>
+        </div>
+      </div>
+
+      <div class="caution">⚠ 실험 중 반드시 비닐 장갑을 착용하고, 맨손으로 한천 조각을 만지지 않습니다. 칼(면도날) 사용 시 안전에 유의합니다.</div>
+
+      <label><span class="badge">1</span> 한천 조각(1cm, 2cm, 3cm) 만들기 &amp; 지시약 넣기 과정을 적어보세요.</label>
+      <textarea id="e-step1" onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+
+      <label><span class="badge">2</span> 식초에 담그는 과정을 적어보세요.</label>
+      <textarea id="e-step2" onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+
+      <label><span class="badge">3</span> 관찰 및 측정 과정을 적어보세요.</label>
+      <textarea id="e-step3" onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+
+      <div class="note">참고 ➍ 한천 조각의 색 변화를 관찰하고 사진을 찍습니다. &nbsp;|&nbsp; ➎ 한천 조각의 가운데를 잘라 사진을 찍습니다.<br>⚠ 한천 조각은 동시에 꺼내고, 외부 사진을 찍은 후 즉시 가운데 부분을 자릅니다.</div>
+    </div>
+
+    <button class="btn btn-primary" onclick="showScreen('screen-results')">다음: 실험 결과 입력 →</button>
+  </div>
+
+  <!-- 4. 실험 결과 (사진) -->
+  <div id="screen-results" class="screen">
+    <div class="card">
+      <h2>실험 결과 - (1) 자르기 전 모습</h2>
+      <p id="group-label-2" style="font-weight:700;color:var(--teal-dark);"></p>
+      <div class="photo-slot" onclick="document.getElementById('photo-before').click()">
+        <span id="photo-before-label">📷 사진을 선택해주세요</span>
+        <input type="file" id="photo-before" accept="image/*" onchange="previewPhoto(this,'preview-before')">
+        <img id="preview-before" style="display:none;">
+      </div>
+
+      <h2 style="margin-top:22px;">실험 결과 - (2) 가운데를 자른 모습</h2>
+      <div class="photo-slot" onclick="document.getElementById('photo-after').click()">
+        <span id="photo-after-label">📷 사진을 선택해주세요</span>
+        <input type="file" id="photo-after" accept="image/*" onchange="previewPhoto(this,'preview-after')">
+        <img id="preview-after" style="display:none;">
+      </div>
+
+      <label>관찰 결과 설명 (색 변화, 확산 정도 등)</label>
+      <textarea id="e-observation" placeholder="예: 3cm 조각은 가운데까지 색이 변하지 않았고, 1cm 조각은 전체적으로 색이 변했다." onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="showScreen('screen-survey')">다음: 만족도 조사 →</button>
+  </div>
+
+  <!-- 5. 만족도 조사 -->
+  <div id="screen-survey" class="screen">
+    <div class="card">
+      <h2>만족도 조사</h2>
+      <label>이번 실험 활동은 어땠나요?</label>
+      <div class="scale" id="satisfaction-scale">
+        <label data-v="1"><input type="radio" name="sat">😞<br>1</label>
+        <label data-v="2"><input type="radio" name="sat">🙁<br>2</label>
+        <label data-v="3"><input type="radio" name="sat">😐<br>3</label>
+        <label data-v="4"><input type="radio" name="sat">🙂<br>4</label>
+        <label data-v="5"><input type="radio" name="sat">😄<br>5</label>
+      </div>
+      <label>한 줄 소감 (선택)</label>
+      <textarea id="e-feedback" onpaste="return false" oncopy="return false" oncut="return false"></textarea>
+    </div>
+    <button class="btn btn-primary" id="submit-btn" onclick="submitReport()">보고서 제출하기 (PDF 저장 + 전송)</button>
+    <div class="error-msg" id="submit-error"></div>
+  </div>
+
+  <!-- 6. 완료 화면 -->
+  <div id="screen-done" class="screen">
+    <div class="card center">
+      <h2>제출 완료!</h2>
+      <p>실험 보고서가 선생님께 전송되었습니다.<br>PDF 파일도 함께 저장되었어요. 수고했습니다 🌱</p>
+    </div>
+  </div>
+
+  <!-- PDF로 캡쳐할 리포트 (화면에는 숨김) -->
+  <div id="pdf-report" style="position:absolute; left:-9999px; top:0; width:700px; background:#fff; padding:30px; font-family:'Noto Sans KR',sans-serif; color:#2B2B26;"></div>
+
+  <footer>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 2h6v5.2l4.6 8.6A2 2 0 0 1 17.9 19H6.1a2 2 0 0 1-1.7-3.2L9 7.2V2z" stroke="#2A6F6F" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M12 12.5c-1.2-1.4-3.4-1.1-3.4 1 0 1.9 2.2 3 3.4 4.1 1.2-1.1 3.4-2.2 3.4-4.1 0-2.1-2.2-2.4-3.4-1z" fill="#C4623A"/>
+    </svg>
+    개발자: kimmie kim
+  </footer>
+</div>
+
+<script>
+/* =========================================================
+   ⚙️ 교사 설정 (기존 3개 앱과 동일한 통합 백엔드 사용)
+========================================================= */
+const PROJECT_NAME = "세포의 분열 이유"; // 구글시트 탭 이름으로 사용됨
+const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzDH4Pqd0g5yEuLTT8CaEPUKhP4uuWqHFfhq6TXwaaogHonYO57eHsLefFo_lo4rJXj8Q/exec";
+
+let student = {};
+let accessRequestId = null;
+let accessPollTimer = null;
+
+// 조 선택 라디오 스타일 처리
+document.querySelectorAll('.group-choice label').forEach(lbl=>{
+  lbl.addEventListener('click', ()=>{
+    document.querySelectorAll('.group-choice label').forEach(l=>l.classList.remove('active'));
+    lbl.classList.add('active');
+    lbl.querySelector('input').checked = true;
+  });
+});
+document.querySelectorAll('#satisfaction-scale label').forEach(lbl=>{
+  lbl.addEventListener('click', ()=>{
+    document.querySelectorAll('#satisfaction-scale label').forEach(l=>l.classList.remove('active'));
+    lbl.classList.add('active');
+    lbl.querySelector('input').checked = true;
+  });
+});
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function goToWaiting(){
+  const grade = document.getElementById('s-grade').value.trim();
+  const cls = document.getElementById('s-class').value.trim();
+  const number = document.getElementById('s-number').value.trim();
+  const name = document.getElementById('s-name').value.trim();
+  const groupEl = document.querySelector('input[name="group"]:checked');
+
+  if(!grade || !cls || !number || !name || !groupEl){
+    document.getElementById('start-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('start-error').style.display = 'none';
+
+  student = { grade, cls, number, name, group: groupEl.value, project: PROJECT_NAME };
+
+  const groupText = student.group === 'A' ? 'A조 (페놀프탈레인 용액)' : 'B조 (BTB 용액)';
+  document.getElementById('group-label-1').textContent = groupText;
+  document.getElementById('group-label-2').textContent = groupText + ' 결과 사진';
+
+  showScreen('screen-waiting');
+  requestTeacherApproval();
+}
+
+// ══════════════════════════════════════════
+// 🔐 선생님 승인 요청 (기존 3개 앱과 동일한 프로토콜)
+// ══════════════════════════════════════════
+async function requestTeacherApproval(){
+  const statusEl = document.getElementById('waiting-status-text');
+  const retryBtn = document.getElementById('waiting-retry-btn');
+  const spinner = document.getElementById('waiting-spinner');
+  retryBtn.style.display = 'none';
+  spinner.style.display = 'block';
+  statusEl.textContent = '선생님께 접속 요청을 보내는 중...';
+
+  if(accessPollTimer){ clearInterval(accessPollTimer); accessPollTimer = null; }
+
+  try{
+    const res = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'requestAccess', project: PROJECT_NAME,
+        grade: student.grade, cls: student.cls, number: student.number, name: student.name
+      })
+    });
+    const data = await res.json();
+    if(data.result === 'error' || !data.id) throw new Error(data.message || '요청 처리 중 오류가 발생했습니다.');
+    accessRequestId = data.id;
+    statusEl.innerHTML = '👩‍🏫 선생님의 승인을 기다리고 있어요...<br><span style="font-size:12px;color:#9a9a8c;">승인되면 자동으로 다음 화면으로 넘어갑니다.</span>';
+    pollAccessStatus();
+    accessPollTimer = setInterval(pollAccessStatus, 5000);
+  }catch(err){
+    spinner.style.display = 'none';
+    statusEl.innerHTML = `접속 요청 중 오류가 발생했습니다.<br><span style="font-size:12px;color:#9a9a8c;">${err.message}</span>`;
+    retryBtn.style.display = 'block';
+  }
+}
+
+async function pollAccessStatus(){
+  if(!accessRequestId) return;
+  try{
+    const res = await fetch(`${GAS_WEB_APP_URL}?action=checkAccess&id=${accessRequestId}`);
+    const data = await res.json();
+    if(data.result !== 'ok') return;
+    if(data.status === '승인'){
+      clearInterval(accessPollTimer); accessPollTimer = null;
+      showScreen('screen-experiment');
+    } else if(data.status === '거절'){
+      clearInterval(accessPollTimer); accessPollTimer = null;
+      document.getElementById('waiting-spinner').style.display = 'none';
+      document.getElementById('waiting-status-text').innerHTML = '선생님이 이번 접속을 승인하지 않았습니다.<br><span style="font-size:12px;color:#9a9a8c;">담당 선생님께 문의해주세요.</span>';
+      document.getElementById('waiting-retry-btn').style.display = 'block';
+    }
+    // '대기' 상태면 계속 폴링
+  }catch(err){
+    // 네트워크 일시 오류는 조용히 다음 폴링에서 재시도
+  }
+}
+
+function previewPhoto(input, previewId){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = document.getElementById(previewId);
+    img.src = e.target.result;
+    img.style.display = 'block';
+    input.closest('.photo-slot').querySelector('span').textContent = '✅ ' + file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+function buildFileName(){
+  const safeProject = PROJECT_NAME.replace(/[\\\/:*?"<>|]/g, '');
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  return `${student.grade}${student.cls}${student.number}${student.name}_${safeProject}_${ds}.pdf`;
+}
+
+async function submitReport(){
+  const btn = document.getElementById('submit-btn');
+  const satEl = document.querySelector('input[name="sat"]:checked');
+  const errEl = document.getElementById('submit-error');
+
+  if(!satEl){
+    errEl.textContent = '만족도를 선택해주세요.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '보고서를 생성하고 있습니다...';
+
+  const groupText = student.group === 'A' ? 'A조 (페놀프탈레인 용액)' : 'B조 (BTB 용액)';
+  const formData = {
+    group: student.group, groupText,
+    goal: document.getElementById('e-goal').value,
+    materials: document.getElementById('e-materials').value,
+    step1: document.getElementById('e-step1').value,
+    step2: document.getElementById('e-step2').value,
+    step3: document.getElementById('e-step3').value,
+    observation: document.getElementById('e-observation').value,
+    satisfaction: satEl.closest('label').dataset.v,
+    feedback: document.getElementById('e-feedback').value
+  };
+
+  let pdfBase64 = '';
+  try{
+    const pdf = await buildPdf(formData);
+    pdfBase64 = pdf.output('datauristring');
+    pdf.save(buildFileName()); // 학생 본인 기기에도 저장
+  }catch(e){
+    console.error('PDF 생성 오류', e);
+  }
+
+  btn.textContent = '선생님께 전송하고 있습니다...';
+
+  const payload = {
+    project: PROJECT_NAME,
+    grade: student.grade, cls: student.cls, number: student.number, name: student.name,
+    timestamp: new Date().toISOString(),
+    resultType: `${formData.groupText} 실험 보고서`,
+    detail: JSON.stringify({
+      목표: formData.goal, 준비물: formData.materials,
+      실험과정1: formData.step1, 실험과정2: formData.step2, 실험과정3: formData.step3,
+      관찰결과: formData.observation, 한줄소감: formData.feedback
+    }),
+    descVal: formData.observation,
+    descScorePct: 100,
+    satisfaction: formData.satisfaction,
+    checked: true,
+    fileName: buildFileName(),
+    pdfBase64
+  };
+
+  try{
+    const res = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>({result:'ok'}));
+    if(data && data.result === 'error') throw new Error(data.message || '서버에서 오류가 발생했습니다.');
+    showScreen('screen-done');
+  }catch(err){
+    errEl.textContent = '❌ 제출 실패: ' + err.message + ' (인터넷 연결 및 선생님 설정을 확인해 주세요)';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '보고서 제출하기 (PDF 저장 + 전송)';
+  }
+}
+
+async function buildPdf(data){
+  const before = document.getElementById('preview-before').src || '';
+  const after = document.getElementById('preview-after').src || '';
+
+  const container = document.getElementById('pdf-report');
+  container.innerHTML = `
+    <h1 style="font-family:'Gowun Batang',serif;color:#1D4F4F;border-bottom:3px solid #D9A441;padding-bottom:10px;">세포의 분열 이유 - 실험 보고서</h1>
+    <p>${student.grade}학년 ${student.cls}반 ${student.number}번 ${student.name} · ${data.groupText}</p>
+    <h3 style="color:#2A6F6F;">목표</h3><p>${data.goal}</p>
+    <h3 style="color:#2A6F6F;">준비물</h3><p>${data.materials}</p>
+    <h3 style="color:#2A6F6F;">실험 과정</h3>
+    <p><b>1)</b> ${data.step1}</p>
+    <p><b>2)</b> ${data.step2}</p>
+    <p><b>3)</b> ${data.step3}</p>
+    <h3 style="color:#2A6F6F;">실험 결과</h3>
+    <p>${data.observation}</p>
+    <div style="display:flex;gap:14px;">
+      ${before ? `<div><p>자르기 전</p><img src="${before}" style="max-width:320px;transform:none !important;"></div>` : ''}
+      ${after ? `<div><p>자른 후</p><img src="${after}" style="max-width:320px;transform:none !important;"></div>` : ''}
+    </div>
+    <h3 style="color:#2A6F6F;">만족도</h3><p>${data.satisfaction} / 5</p>
+    <p style="font-size:12px;color:#999;margin-top:20px;">개발자: kimmie kim</p>
+  `;
+
+  const canvas = await html2canvas(container, {scale:2, useCORS:true});
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p','pt','a4');
+  const pageW = pdf.internal.pageSize.getWidth();
+  const imgH = canvas.height * pageW / canvas.width;
+  pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH);
+  return pdf;
+}
+</script>
+</body>
+</html>
