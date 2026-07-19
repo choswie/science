@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디지털 현미경 관찰 보고서 v20</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .viewfinder { border: 2px solid #ef4444; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); z-index: 10; }
+        .step-content { display: none; }
+        .step-content.active { display: block; }
+        canvas { touch-action: none; cursor: move; }
+        .capture-target-active { border: 3px solid #3b82f6 !important; background-color: #eff6ff; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-8">
+
+<div class="max-w-5xl mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-200">
+    <h1 class="text-3xl font-black mb-8 text-slate-800 border-b pb-4">🔬 디지털 현미경 관찰 보고서 v20</h1>
+
+    <button id="backToModeBtn" onclick="goToModeSelect()" class="no-print hidden fixed top-4 right-4 md:top-6 md:right-6 z-30 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-lg">🏠 처음으로</button>
+
+    <div id="msgBox" class="hidden fixed top-5 left-1/2 transform -translate-x-1/2 z-50 px-6 py-4 bg-blue-600 text-white rounded-xl shadow-2xl font-bold text-lg animate-bounce"></div>
+
+    <!-- 🔐 선생님 승인 대기 모달 -->
+    <div id="approval-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-90 flex justify-center items-center z-[100]">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl mx-4 border-t-8 border-blue-600">
+            <div class="text-6xl mb-4"><span id="approval-icon" class="inline-block animate-spin">⏳</span> 👩‍🏫</div>
+            <h2 class="text-2xl font-extrabold mb-2 text-blue-900">선생님 승인 대기</h2>
+            <p id="approval-status-text" class="text-gray-600 mb-6 text-sm md:text-base">선생님께 접속 요청을 보내는 중...</p>
+            <button id="approval-retry-btn" onclick="retryTeacherApproval()" class="hidden w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg">
+                🔄 다시 요청하기
+            </button>
+        </div>
+    </div>
+
+    <!-- 진행 방식 선택 -->
+    <section id="step-mode" class="step-content active">
+        <h2 class="font-bold text-xl mb-4">진행 방식을 선택하세요</h2>
+        <p class="text-sm text-slate-500 mb-6">수업 목적에 맞게 아래 방식 중 하나를 선택할 수 있습니다.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button onclick="selectMode('full')" class="text-left p-6 border-2 border-blue-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition">
+                <div class="text-2xl mb-2">📘</div>
+                <div class="font-bold text-lg mb-1">전체 학습 모드</div>
+                <div class="text-sm text-slate-500">이론 학습 → 삽화 매칭 → 현미경 사진 캡처·배치까지 진행한 뒤, 교사 수업 후 사진 재배치 확인 → 관찰 기록 → 최종 보고서까지 이어서 진행합니다.</div>
+            </button>
+            <button onclick="selectMode('quick')" class="text-left p-6 border-2 border-green-200 rounded-2xl hover:border-green-500 hover:bg-green-50 transition">
+                <div class="text-2xl mb-2">🔬</div>
+                <div class="font-bold text-lg mb-1">수행평가 모드 (이론 생략)</div>
+                <div class="text-sm text-slate-500">이론 학습과 삽화 매칭 단계를 생략하고, 관찰한 현미경 사진을 바로 첨부·캡처하여 보고서를 작성합니다.</div>
+            </button>
+        </div>
+    </section>
+
+    <!-- 1차 활동(이론+매칭+사진 캡처·배치) 완료 화면 — 교사 수업 후 같은 세션에서 바로 이어감 (재승인 불필요) -->
+    <section id="step-3done" class="step-content">
+        <div class="text-center py-10">
+            <div class="text-5xl mb-4">✅</div>
+            <h2 class="font-bold text-2xl mb-3">1차 활동을 완료했습니다!</h2>
+            <p class="text-slate-500 mb-8 max-w-md mx-auto">선생님 수업을 들은 뒤, 아래 버튼을 눌러 이어서 진행하세요.<br><span class="text-xs">(이 화면을 벗어나지 않으면 다시 승인받을 필요 없이 바로 이어집니다)</span></p>
+            <button onclick="nextStep('3b')" class="px-10 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg">🔁 수업 후 이어하기</button>
+        </div>
+    </section>
+
+    <!-- 0단계: 학생 정보 -->
+    <section id="step-0" class="step-content">
+        <h2 class="font-bold text-xl mb-4">시작단계: 학생 정보 입력</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <input type="text" id="std-grade" placeholder="학년" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-class" placeholder="반" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-num" placeholder="번호" class="p-3 rounded-xl border border-slate-300">
+            <input type="text" id="std-name" placeholder="이름" class="p-3 rounded-xl border border-slate-300">
+        </div>
+        <button onclick="nextStep(1)" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"><span id="theory-step-btn-label">이론 학습 시작하기</span></button>
+    </section>
+
+    <!-- 1단계: 이론 학습 -->
+    <section id="step-1" class="step-content">
+        <h2 class="font-bold text-xl mb-4">1단계: 단계별 이론적 특징 정리</h2>
+        <table class="w-full border-collapse bg-white border">
+            <thead class="bg-slate-50"><tr><th class="p-3 border">단계</th><th class="p-3 border">이론적 특징 (2-3가지)</th></tr></thead>
+            <tbody id="theory-table"></tbody>
+        </table>
+        <div class="mt-6 flex justify-between">
+            <button onclick="nextStep(0)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep('1b')" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음: 삽화로 단계 익히기</button>
+        </div>
+    </section>
+
+    <!-- 1.5단계: 삽화 매칭 -->
+    <section id="step-1b" class="step-content">
+        <h2 class="font-bold text-xl mb-2">1.5단계: 삽화로 단계 익히기</h2>
+        <p class="text-sm text-slate-500 mb-6">염색체의 모양과 배열을 보고, 아래 삽화 카드를 알맞은 단계 칸으로 끌어다 놓아보세요.</p>
+
+        <div id="match-pool" class="flex flex-wrap gap-3 justify-center mb-8 p-4 bg-slate-50 rounded-xl border min-h-[130px]"></div>
+
+        <div id="match-slots" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2"></div>
+
+        <p id="match-feedback" class="text-sm font-bold my-4 hidden"></p>
+
+        <div class="mt-6 flex justify-between items-center flex-wrap gap-3">
+            <button onclick="prevFromMatchStep()" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button id="matchNextBtn" onclick="finalizeMatchStep()" class="hidden px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음: 실제 표본에서 찾기</button>
+        </div>
+    </section>
+
+    <!-- 2단계: 사진 조절 -->
+    <section id="step-2" class="step-content">
+        <h2 class="font-bold text-xl mb-4">2단계: 사진 조절</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(0, event)">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(1, event)">
+            <input type="file" class="text-sm p-2 bg-slate-50 rounded-lg border" onchange="handleFile(2, event)">
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 rounded-xl border items-center">
+            <button onclick="changeActiveCanvas(0)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 1</button>
+            <button onclick="changeActiveCanvas(1)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 2</button>
+            <button onclick="changeActiveCanvas(2)" class="px-3 py-1 bg-slate-700 text-white rounded text-sm">사진 3</button>
+            <label class="ml-4 text-xs">회전: <input type="range" id="rot" min="-180" max="180" value="0" oninput="updateState()" class="w-16"></label>
+            <label class="text-xs">확대: <input type="range" id="zoom" min="0.1" max="5" step="0.1" value="1" oninput="updateState()" class="w-16"></label>
+            <label class="text-xs">박스: <input type="range" id="vfSize" min="50" max="300" value="150" oninput="updateViewfinder()" class="w-16"></label>
+        </div>
+
+        <div id="capture-action-area" class="hidden mb-4 p-4 bg-blue-100 rounded-xl border border-blue-300 text-center">
+            <p class="font-bold text-blue-800 mb-2" id="capture-instruction"></p>
+            <button id="do-capture-btn" onclick="executeCapture()" class="px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">현재 단계 캡처하기</button>
+        </div>
+
+        <div id="canvas-container" class="relative overflow-hidden border-4 border-slate-800 rounded-xl bg-black h-80 mb-6">
+            <canvas id="mainCanvas"></canvas>
+            <div id="viewfinder" class="viewfinder w-[150px] h-[150px]"></div>
+        </div>
+        
+        <div class="flex justify-between">
+            <button id="photoPrevBtn" onclick="prevFromPhotoStep()" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(3)" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">3단계로 이동</button>
+        </div>
+    </section>
+
+    <!-- 3단계: 사진 캡처 및 선택 -->
+    <section id="step-3" class="step-content">
+        <h2 class="font-bold text-xl mb-4">3단계: 각 단계별 사진 캡처</h2>
+        <div id="theory-ref-step3" class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-sm"></div>
+        
+        <p class="text-sm text-slate-500 mb-4">각 단계의 '사진 삽입' 영역을 클릭하여 캡처를 준비하세요.</p>
+        <table class="w-full border-collapse border">
+            <tbody id="capture-table"></tbody>
+        </table>
+        <div class="flex justify-between mt-6">
+            <button onclick="nextStep(2)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="finishFirstRound()" class="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음</button>
+        </div>
+    </section>
+
+    <!-- 3b단계: 사진 재배치 확인 (교사 수업 후, 학생이 2~3단계에서 직접 캡처한 사진을 섞어서 다시 배치) -->
+    <section id="step-3b" class="step-content">
+        <h2 class="font-bold text-xl mb-2">사진 재배치 확인</h2>
+        <p class="text-sm text-slate-500 mb-6">앞서 직접 캡처한 사진들이 섞여 있습니다. 각 사진을 알맞은 단계 칸으로 다시 끌어다 놓아보세요.</p>
+
+        <div id="photo-match-pool" class="flex flex-wrap gap-3 justify-center mb-8 p-4 bg-slate-50 rounded-xl border min-h-[130px]"></div>
+        <div id="photo-match-slots" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2"></div>
+        <p id="photo-match-feedback" class="text-sm font-bold my-4 hidden"></p>
+
+        <div class="flex justify-between mt-6 items-center flex-wrap gap-3">
+            <button onclick="nextStep('3done')" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="goFixPhoto()" class="px-6 py-4 bg-amber-100 text-amber-800 border-2 border-amber-300 rounded-xl font-bold text-sm">📷 사진이 잘못됐어요, 다시 캡처하기</button>
+            <button id="photoMatchNextBtn" onclick="finalizePhotoRecheck()" class="hidden px-8 py-4 bg-blue-600 text-white rounded-xl font-bold">다음: 상세 관찰 기록</button>
+        </div>
+    </section>
+
+    <!-- 4단계: 관찰 기록 -->
+    <section id="step-4" class="step-content">
+        <h2 class="font-bold text-xl mb-4">4단계: 상세 관찰 내용 기록</h2>
+        <div id="observation-table-container"></div>
+        <div class="flex justify-between mt-6">
+            <button onclick="prevFromObservation()" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">이전</button>
+            <button onclick="nextStep(5)" class="px-8 py-4 bg-green-600 text-white rounded-xl font-bold">최종 보고서 검토</button>
+        </div>
+    </section>
+
+    <!-- 5단계: 최종 보고서 -->
+    <section id="step-5" class="step-content">
+        <h2 class="font-bold text-xl mb-4">5단계: 최종 검토 및 제출</h2>
+        <div id="final-report" class="p-6 bg-white border shadow-sm"></div>
+        <div id="submit-status" class="mt-4 text-sm font-bold"></div>
+        <div class="flex justify-between mt-6 gap-3">
+            <button onclick="nextStep(4)" class="px-8 py-4 bg-slate-200 rounded-xl font-bold">수정하기</button>
+            <button onclick="window.print()" class="px-8 py-4 bg-slate-800 text-white rounded-xl font-bold">PDF 저장</button>
+            <button id="submit-btn" onclick="submitReport()" class="px-8 py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700">교사에게 제출하기</button>
+        </div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 mt-6 pt-4 border-t">개발자 kimmie kim</footer>
+</div>
+
+<script>
+    const stages = ['간기', '전기', '중기', '후기', '말기'];
+    let state = { observations: {}, captures: {}, imgStates: [ {img: null, rot: 0, zoom: 1, dx: 0, dy: 0}, {img: null, rot: 0, zoom: 1, dx: 0, dy: 0}, {img: null, rot: 0, zoom: 1, dx: 0, dy: 0} ], activeIdx: 0 };
+    let currentCaptureTarget = null;
+    let quickMode = false; // true = 수행평가 모드(이론 생략)
+
+    // ⚠ 교사용 대시보드로 제출 데이터를 전송할 Google Apps Script 웹앱 URL을 여기에 붙여넣으세요.
+    const SUBMIT_URL = 'https://script.google.com/macros/s/AKfycbzDH4Pqd0g5yEuLTT8CaEPUKhP4uuWqHFfhq6TXwaaogHonYO57eHsLefFo_lo4rJXj8Q/exec';
+    const PROJECT_NAME = '체세포분열 관찰';
+
+    function selectMode(m) {
+        quickMode = (m === 'quick');
+        document.getElementById('theory-step-btn-label').innerText = quickMode ? '사진 관찰 시작하기' : '이론 학습 시작하기';
+        document.getElementById('backToModeBtn').classList.remove('hidden');
+        nextStep(0);
+    }
+
+    function prevFromMatchStep() { nextStep(1); }
+
+    function goToModeSelect() {
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        document.getElementById('step-mode').classList.add('active');
+        document.getElementById('backToModeBtn').classList.add('hidden');
+
+        // 승인 대기 상태가 남아있다면 정리
+        if (accessPollTimer) { clearInterval(accessPollTimer); accessPollTimer = null; }
+        accessRequestId = null;
+        document.getElementById('approval-modal').classList.add('hidden');
+
+        // 1.5단계(삽화 매칭) 초기화
+        const matchPool = document.getElementById('match-pool');
+        const matchSlots = document.getElementById('match-slots');
+        if (matchPool) matchPool.innerHTML = '';
+        if (matchSlots) matchSlots.innerHTML = '';
+        const photoPool = document.getElementById('photo-match-pool');
+        const photoSlots = document.getElementById('photo-match-slots');
+        if (photoPool) photoPool.innerHTML = '';
+        if (photoSlots) photoSlots.innerHTML = '';
+        matchResultPre = null;
+        matchResultPost = null;
+        capturesSnapshotPre = null;
+        photoFixMode = false;
+
+        // 새 학생이 이어서 사용할 수 있도록 학생 정보 입력을 완전히 초기화(잠금 해제)
+        ['std-grade', 'std-class', 'std-num', 'std-name'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.disabled = false;
+            el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+        });
+
+        // 이론 학습 입력 초기화
+        stages.forEach(s => {
+            const el = document.getElementById(`theory-${s}`);
+            if (el) el.value = '';
+        });
+
+        // 업로드한 사진/캡처/관찰기록 초기화
+        document.querySelectorAll('#step-2 input[type=file]').forEach(el => el.value = '');
+        state.observations = {};
+        state.captures = {};
+        state.imgStates = [
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 },
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 },
+            { img: null, rot: 0, zoom: 1, dx: 0, dy: 0 }
+        ];
+        state.activeIdx = 0;
+
+        // 제출 상태 메시지 및 버튼 초기화
+        const statusEl = document.getElementById('submit-status');
+        if (statusEl) statusEl.innerHTML = '';
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '교사에게 제출하기'; }
+    }
+    
+    // Init Tables
+    const theoryTbody = document.getElementById('theory-table');
+    const captureTbody = document.getElementById('capture-table');
+
+    function showMsg(msg) {
+        const b = document.getElementById('msgBox');
+        b.innerText = msg;
+        b.classList.remove('hidden');
+        setTimeout(() => b.classList.add('hidden'), 3000);
+    }
+
+    // 이론 정리·관찰 기록 입력칸은 복사/붙여넣기를 막아 직접 타이핑만 허용한다.
+    function blockClip(e) {
+        e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        showMsg('⚠️ 이 칸은 복사·붙여넣기를 사용할 수 없어요. 직접 타이핑해서 작성해 주세요.');
+    }
+    function blockClipShortcut(e) {
+        const k = e.key ? e.key.toLowerCase() : '';
+        if ((e.ctrlKey || e.metaKey) && ['v', 'c', 'x'].includes(k)) blockClip(e);
+    }
+    const NO_PASTE_ATTRS = `onpaste="blockClip(event)" oncopy="blockClip(event)" oncut="blockClip(event)" ondrop="blockClip(event)" ondragover="event.preventDefault()" oncontextmenu="blockClip(event)" onkeydown="blockClipShortcut(event)"`;
+
+    stages.forEach(s => {
+        theoryTbody.innerHTML += `<tr><td class="p-4 font-bold border w-32">${s}</td><td class="p-2 border"><textarea class="w-full h-16 p-2 border-none" id="theory-${s}" ${NO_PASTE_ATTRS}></textarea></td></tr>`;
+        captureTbody.innerHTML += `<tr class="border capture-row" id="row-${s}"><td class="p-4 font-bold border w-32">${s}</td><td class="p-2 border"><div id="cap-${s}" class="w-40 h-40 bg-slate-100 flex items-center justify-center cursor-pointer border rounded-lg hover:border-blue-500" onclick="prepareCapture('${s}')">사진 삽입</div></td></tr>`;
+    });
+
+    function prepareCapture(stage) {
+        currentCaptureTarget = stage;
+        document.querySelectorAll('.capture-row').forEach(row => row.classList.remove('capture-target-active'));
+        document.getElementById(`row-${stage}`).classList.add('capture-target-active');
+        
+        document.getElementById('capture-action-area').classList.remove('hidden');
+        document.getElementById('capture-instruction').innerText = `현재 선택된 단계: [${stage}] - 2단계로 이동하여 사진을 조절한 뒤 [현재 단계 캡처하기] 버튼을 누르세요.`;
+        nextStep(2);
+    }
+
+    function executeCapture() {
+        if(!currentCaptureTarget) return;
+        if(!state.imgStates[state.activeIdx].img) { showMsg('사진을 먼저 업로드하세요!'); return; }
+        
+        const size = parseInt(document.getElementById('viewfinder').style.width) || 150;
+        const temp = document.createElement('canvas'); temp.width = size; temp.height = size;
+        temp.getContext('2d').drawImage(canvas, (canvas.width/2)-(size/2), (canvas.height/2)-(size/2), size, size, 0,0, size, size);
+        state.captures[currentCaptureTarget] = temp.toDataURL();
+        
+        document.getElementById('cap-'+currentCaptureTarget).innerHTML = `<img src="${state.captures[currentCaptureTarget]}" class="w-full h-full object-cover">`;
+        
+        currentCaptureTarget = null;
+        document.getElementById('capture-action-area').classList.add('hidden');
+        document.querySelectorAll('.capture-row').forEach(row => row.classList.remove('capture-target-active'));
+        showMsg('캡처 완료!');
+        nextStep(3);
+    }
+
+    function renderObservationTable() {
+        const container = document.getElementById('observation-table-container');
+        let html = `<table class="w-full border-collapse border"><thead class="bg-slate-50"><tr><th class="p-3 border">단계</th><th class="p-3 border">캡처 사진</th><th class="p-3 border">관찰 내용</th></tr></thead><tbody>`;
+        stages.forEach(s => {
+            html += `<tr class="border">
+                        <td class="p-4 font-bold border w-24">${s}</td>
+                        <td class="p-2 border">
+                            ${state.captures[s] ? `<img src="${state.captures[s]}" class="w-32 h-32 object-cover border rounded">` : '<span class="text-xs text-slate-400">사진 없음</span>'}
+                        </td>
+                        <td class="p-2 border">
+                            <textarea class="w-full h-32 p-2 border rounded" oninput="state.observations['${s}'] = this.value" ${NO_PASTE_ATTRS}>${state.observations[s] || ''}</textarea>
+                        </td>
+                    </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    }
+
+    function lockStudentInfo() {
+        ['std-grade', 'std-class', 'std-num', 'std-name'].forEach(id => {
+            const el = document.getElementById(id);
+            el.disabled = true;
+            el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+        });
+    }
+
+    function nextStep(s) {
+        const activeEl = document.querySelector('.step-content.active');
+        const current = activeEl ? activeEl.id : '';
+
+        // 0단계(학생 정보)에서 넘어갈 때: 이름 확인 + 선생님 승인을 먼저 요청
+        if(current === 'step-0' && s === 1) {
+            const n = document.getElementById('std-name').value; if(!n) { showMsg('⚠ 학생 이름을 입력하세요!'); return; }
+            lockStudentInfo(); // 정보 입력 후에는 수정/재입력 불가 (다른 학생으로 바꿔치기 방지)
+            const targetStep = quickMode ? 2 : 1;
+            requestTeacherApproval(targetStep);
+            return; // 승인 대기 중 — 승인되면 continueNextStep(targetStep)이 이어서 진행함
+        }
+        continueNextStep(s);
+    }
+
+    // ══════════════════════════════════════════
+    // 🔐 선생님 승인 요청 (담당하지 않는 학생의 불필요한 제출 방지)
+    // ══════════════════════════════════════════
+    let accessRequestId = null;
+    let accessPollTimer = null;
+    let accessTargetStep = null;
+
+    function retryTeacherApproval(){
+        if(accessTargetStep != null) requestTeacherApproval(accessTargetStep);
+    }
+
+    async function requestTeacherApproval(targetStep) {
+        accessTargetStep = targetStep;
+        const modal = document.getElementById('approval-modal');
+        const iconEl = document.getElementById('approval-icon');
+        const statusEl = document.getElementById('approval-status-text');
+        const retryBtn = document.getElementById('approval-retry-btn');
+        modal.classList.remove('hidden');
+        iconEl.textContent = '⏳';
+        iconEl.classList.add('animate-spin');
+        retryBtn.classList.add('hidden');
+        statusEl.textContent = '선생님께 접속 요청을 보내는 중...';
+
+        if (accessPollTimer) { clearInterval(accessPollTimer); accessPollTimer = null; }
+
+        if (!SUBMIT_URL) {
+            iconEl.textContent = '⚠️'; iconEl.classList.remove('animate-spin');
+            statusEl.innerHTML = '제출 주소가 설정되지 않아 승인 절차를 진행할 수 없습니다.<br><span class="text-xs text-gray-400">선생님께 문의해주세요.</span>';
+            return;
+        }
+
+        try {
+            const res = await fetch(SUBMIT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                    action: 'requestAccess', project: PROJECT_NAME,
+                    grade: document.getElementById('std-grade').value,
+                    cls: document.getElementById('std-class').value,
+                    number: document.getElementById('std-num').value,
+                    name: document.getElementById('std-name').value
+                })
+            });
+            const data = await res.json();
+            if (data.result === 'error' || !data.id) throw new Error(data.message || '요청 처리 중 오류가 발생했습니다.');
+            accessRequestId = data.id;
+            statusEl.innerHTML = '👩‍🏫 선생님의 승인을 기다리고 있어요...<br><span class="text-xs text-gray-400">승인되면 자동으로 다음 화면으로 넘어갑니다.</span>';
+            pollAccessStatus();
+            accessPollTimer = setInterval(pollAccessStatus, 5000);
+        } catch (err) {
+            iconEl.textContent = '⚠️'; iconEl.classList.remove('animate-spin');
+            statusEl.innerHTML = `접속 요청 중 오류가 발생했습니다.<br><span class="text-xs text-gray-400">${err.message}</span>`;
+            retryBtn.classList.remove('hidden');
+        }
+    }
+
+    async function pollAccessStatus() {
+        if (!accessRequestId) return;
+        try {
+            const res = await fetch(`${SUBMIT_URL}?action=checkAccess&id=${accessRequestId}`);
+            const data = await res.json();
+            if (data.result !== 'ok') return;
+            if (data.status === '승인') {
+                clearInterval(accessPollTimer); accessPollTimer = null;
+                document.getElementById('approval-modal').classList.add('hidden');
+                continueNextStep(accessTargetStep); // 승인 완료 → 원래 가려던 단계로 진행
+            } else if (data.status === '거절') {
+                clearInterval(accessPollTimer); accessPollTimer = null;
+                const iconEl = document.getElementById('approval-icon');
+                iconEl.textContent = '🚫'; iconEl.classList.remove('animate-spin');
+                document.getElementById('approval-status-text').innerHTML = '선생님이 이번 접속을 승인하지 않았습니다.<br><span class="text-xs text-gray-400">담당 선생님께 문의해주세요.</span>';
+                document.getElementById('approval-retry-btn').classList.remove('hidden');
+            }
+            // '대기' 상태면 계속 폴링
+        } catch (err) {
+            // 네트워크 일시 오류는 조용히 다음 폴링에서 재시도
+        }
+    }
+
+    // 1.5단계에서 학생이 실제로 배치한 삽화를 (정답 여부 표시 없이) 참고용으로 다시 보여줌
+    function renderMatchReferenceHTML(result, label) {
+        if (!result || !result.placements) {
+            return `<p class="text-slate-400 text-xs mb-3">${label}: 매칭 기록이 없습니다.</p>`;
+        }
+        const p = result.placements;
+        let html = `<div class="text-xs font-bold text-slate-600 mb-1">${label}</div><div class="grid grid-cols-5 gap-2 mb-4">`;
+        MITOSIS_MATCH_STAGES.forEach(stage => {
+            const placed = p[stage];
+            html += `<div class="text-center">
+                <div class="text-[11px] font-bold mb-1">${stage}</div>
+                <div class="w-full aspect-square bg-white border rounded-lg p-1">${placed ? stageIllustrationSVG(placed) : '<div class="text-[10px] text-slate-400 flex items-center justify-center h-full">-</div>'}</div>
+            </div>`;
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function continueNextStep(s) {
+        const activeEl2 = document.querySelector('.step-content.active');
+        const current = activeEl2 ? activeEl2.id : '';
+        if(s === '1b' && !quickMode && current === 'step-1') {
+            let v = true; stages.forEach(st => { if(!document.getElementById(`theory-${st}`).value.trim()) v = false; }); 
+            if(!v) { showMsg('⚠ 경고: 이론적 특징을 모두 작성해주세요!'); return; } 
+        }
+        if(s === '1b') buildMatchStep();
+        if(s === '3b') buildPhotoRecheckStep();
+        if(s === 3) {
+            const container = document.getElementById('theory-ref-step3');
+            if(quickMode) {
+                container.innerHTML = `<p class="text-slate-500">🔬 수행평가 모드: 이론 학습 단계를 생략했습니다. 관찰한 사진을 각 단계에 맞게 캡처해주세요.</p>`;
+            } else {
+                let html = `<strong class="block mb-2 text-blue-800">1단계에서 작성한 이론적 특징:</strong>`;
+                stages.forEach(s2 => {
+                    const val = document.getElementById(`theory-${s2}`).value || '입력 없음';
+                    html += `<p class="mb-1"><span class="font-bold">${s2}:</span> ${val}</p>`;
+                });
+                html += `<div class="mt-4">` + renderMatchReferenceHTML(matchResultPre, '1.5단계에서 배치한 삽화') + `</div>`;
+                container.innerHTML = html;
+            }
+        }
+        if(s === 4) renderObservationTable();
+        
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`step-${s}`).classList.add('active');
+        if(s === 5) renderFinal();
+
+        // 2단계 화면의 "이전" 버튼: 개인정보 입력(0단계)으로는 절대 돌아갈 수 없도록 처리
+        const prevBtn = document.getElementById('photoPrevBtn');
+        if (prevBtn) {
+            if (quickMode) { prevBtn.style.visibility = 'hidden'; } // 수행평가 모드는 0단계 외에 이전 단계가 없음
+            else { prevBtn.style.visibility = 'visible'; }
+        }
+    }
+
+    // 2단계 화면의 "이전" 버튼: 전체학습 모드에서만 1단계(이론학습)로 이동, 0단계로는 절대 이동하지 않음
+    function prevFromPhotoStep() { if (!quickMode) nextStep('1b'); }
+
+    // ══════════════════════════════════════════
+    // 1.5단계: 삽화 매칭 (염색체 모양으로 단계 구분 연습)
+    // ══════════════════════════════════════════
+    const MITOSIS_MATCH_STAGES = ['간기', '전기', '중기', '후기', '말기'];
+    // 저작권 문제를 피하기 위해 특정 교재의 배색과는 다른 원본 색상 조합을 사용하며,
+    // 더 밝고 선명하게 보이도록 채도를 높였습니다.
+    const MATCH_COLORS = ['#06b6d4', '#f97316', '#06b6d4', '#f97316']; // 염색체 두 쌍: 청록 / 주황
+    const CELL_FILL = '#f0fdf9';       // 세포질(민트빛, 밝게)
+    const CELL_STROKE = '#10b981';     // 세포막 테두리(선명한 에메랄드)
+    const NUCLEUS_FILL = '#fffbeb';    // 핵 내부(밝은 크림)
+    const NUCLEUS_STROKE = '#fbbf24';  // 핵막 테두리(선명한 amber)
+    const NUCLEOLUS_COLOR = '#f43f5e'; // 인(선명한 로즈)
+
+    function chromoX(cx, cy, angle, color) {
+        return `<g transform="translate(${cx},${cy}) rotate(${angle})">
+            <line x1="-6" y1="-6" x2="6" y2="6" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+            <line x1="6" y1="-6" x2="-6" y2="6" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+        </g>`;
+    }
+    function chromoV(cx, cy, angle, color) {
+        // 방추사에 끌려가는 자매염색분체를 V자로 표현. angle=0→위쪽으로 벌어짐, 90→오른쪽, -90→왼쪽, 180→아래쪽
+        return `<g transform="translate(${cx},${cy}) rotate(${angle})">
+            <line x1="0" y1="-7" x2="-5" y2="2" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+            <line x1="0" y1="-7" x2="5" y2="2" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+        </g>`;
+    }
+    // 방추사가 뻗어나가는 중심체(별 모양)
+    function centrosome(cx, cy) {
+        let lines = '';
+        for (let a = 0; a < 360; a += 40) {
+            const rad = a * Math.PI / 180;
+            const x2 = cx + Math.cos(rad) * 8, y2 = cy + Math.sin(rad) * 8;
+            lines += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="1"/>`;
+        }
+        return `<circle cx="${cx}" cy="${cy}" r="2" fill="#64748b"/>${lines}`;
+    }
+    function spindleFiber(x1, y1, x2, y2) {
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="1,2"/>`;
+    }
+
+    // 각 단계를 상징하는 모식도(SVG)를 직접 그려서 사용 (구조는 교과서 일반형을 참고하되,
+    // 색상은 원본 배색을 그대로 쓰지 않고 청록/주황색 조합으로 새로 구성한 원본 도식입니다)
+    // 방추사 극(중심체)은 좌우(양옆)에 위치하므로, 중기의 세로 정렬(중기판)과 방향을 맞춰
+    // 후기·말기의 염색체 분리도 좌우로 일어나도록 통일했습니다.
+    function stageIllustrationSVG(stage) {
+        let inner = '';
+        let outer = `<ellipse cx="70" cy="70" rx="58" ry="50" fill="${CELL_FILL}" stroke="${CELL_STROKE}" stroke-width="3"/>`;
+        if (stage === '간기') {
+            inner += `<ellipse cx="70" cy="70" rx="34" ry="30" fill="${NUCLEUS_FILL}" stroke="${NUCLEUS_STROKE}" stroke-width="2"/>`; // 핵막
+            inner += `<circle cx="80" cy="60" r="4.5" fill="${NUCLEOLUS_COLOR}"/>`; // 인
+            const threads = [
+                "M50,58 q4,-6 8,0 q4,6 8,0 q4,-6 8,0",
+                "M46,74 q5,-5 10,0 q5,5 10,0 q5,-5 10,0",
+                "M58,86 q4,-5 8,0 q4,5 8,0",
+                "M54,48 q4,4 8,0 q4,-4 8,0"
+            ];
+            threads.forEach((d,i)=> inner += `<path d="${d}" fill="none" stroke="${MATCH_COLORS[i%4]}" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>`);
+        } else if (stage === '전기') {
+            inner += `<ellipse cx="70" cy="70" rx="38" ry="34" fill="${NUCLEUS_FILL}" stroke="${NUCLEUS_STROKE}" stroke-width="1.5" stroke-dasharray="3,3"/>`; // 핵막 소실 중
+            inner += centrosome(16, 70) + centrosome(124, 70); // 중심체(양 극) 형성 시작
+            const spots = [[54,54,20],[86,58,-30],[58,86,60],[84,88,-10]];
+            spots.forEach((s,i)=> inner += chromoX(s[0], s[1], s[2], MATCH_COLORS[i]));
+        } else if (stage === '중기') {
+            inner += centrosome(16, 70) + centrosome(124, 70);
+            inner += `<line x1="70" y1="30" x2="70" y2="110" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2,2"/>`; // 중기판(적도면) 안내선
+            const ys = [46, 58, 82, 94];
+            ys.forEach((y,i)=>{
+                inner += spindleFiber(16,70,70,y) + spindleFiber(124,70,70,y);
+                inner += chromoX(70, y, i%2===0?18:-18, MATCH_COLORS[i]);
+            });
+        } else if (stage === '후기') {
+            inner += centrosome(16, 70) + centrosome(124, 70);
+            const leftX = 40, rightX = 100;
+            const ys = [50, 62, 78, 90];
+            MATCH_COLORS.forEach((c,i)=>{
+                inner += spindleFiber(16,70, leftX, ys[i]) + spindleFiber(124,70, rightX, ys[i]);
+                inner += chromoV(leftX, ys[i], -90, c);  // 왼쪽 극 방향으로 끌려감
+                inner += chromoV(rightX, ys[i], 90, c);  // 오른쪽 극 방향으로 끌려감
+            });
+        } else if (stage === '말기') {
+            // 세포막은 다른 단계와 같은 하나의 타원 그대로 두고(아직 완전히 안 갈라진 상태),
+            // 그 안에 두 핵이 여유 있게 형성되도록 크기를 조정해 핵막과 세포막이 겹치지 않게 함
+            inner += `<ellipse cx="42" cy="70" rx="18" ry="26" fill="${NUCLEUS_FILL}" stroke="${NUCLEUS_STROKE}" stroke-width="2"/>`; // 새 핵막(왼쪽)
+            inner += `<ellipse cx="98" cy="70" rx="18" ry="26" fill="${NUCLEUS_FILL}" stroke="${NUCLEUS_STROKE}" stroke-width="2"/>`; // 새 핵막(오른쪽)
+            const ys = [58, 66, 74, 82];
+            MATCH_COLORS.forEach((c,i)=>{
+                inner += chromoV(42, ys[i], -90, c);
+                inner += chromoV(98, ys[i], 90, c);
+            });
+            inner += `<circle cx="42" cy="70" r="2.2" fill="${NUCLEOLUS_COLOR}"/><circle cx="98" cy="70" r="2.2" fill="${NUCLEOLUS_COLOR}"/>`; // 새로 생기는 인
+            // 세포판(cell plate) 형성 표시 — 두 핵 사이 세로 격자 구조
+            inner += `<line x1="66" y1="52" x2="66" y2="88" stroke="#94a3b8" stroke-width="1.5"/>`;
+            for (let y = 56; y <= 84; y += 6) inner += `<line x1="66" y1="${y}" x2="74" y2="${y}" stroke="#94a3b8" stroke-width="1"/>`;
+            inner += `<line x1="74" y1="52" x2="74" y2="88" stroke="#94a3b8" stroke-width="1.5"/>`;
+        }
+        return `<svg viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;pointer-events:none;">${outer}${inner}</svg>`;
+    }
+
+    function buildMatchStep() {
+        const pool = document.getElementById('match-pool');
+        const slots = document.getElementById('match-slots');
+        pool.innerHTML = '';
+        slots.innerHTML = '';
+
+        const shuffled = [...MITOSIS_MATCH_STAGES].sort(() => Math.random() - 0.5);
+        shuffled.forEach((stage, idx) => {
+            const card = document.createElement('div');
+            card.className = 'match-card w-24 h-24 bg-white border-2 border-slate-300 rounded-xl shadow p-1';
+            card.style.cursor = 'grab';
+            card.style.touchAction = 'none';
+            card.dataset.stage = stage;
+            card.id = `match-card-${idx}`;
+            card.innerHTML = stageIllustrationSVG(stage);
+            card.addEventListener('pointerdown', onMatchPointerDown);
+            pool.appendChild(card);
+        });
+
+        MITOSIS_MATCH_STAGES.forEach(stage => {
+            const wrap = document.createElement('div');
+            wrap.className = 'flex flex-col items-center';
+            wrap.innerHTML = `
+                <div class="text-sm font-bold mb-1">${stage}</div>
+                <div class="match-dropzone w-24 h-24 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 flex items-center justify-center" data-stage="${stage}"></div>
+            `;
+            slots.appendChild(wrap);
+        });
+
+        document.getElementById('match-feedback').classList.add('hidden');
+        document.getElementById('matchNextBtn').classList.add('hidden');
+    }
+
+    let matchDragged = null, matchShiftX = 0, matchShiftY = 0, matchCurrentZone = null, matchOriginParent = null;
+
+    function onMatchPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        matchDragged = e.currentTarget;
+        e.preventDefault();
+        matchOriginParent = matchDragged.parentElement;
+
+        const rect = matchDragged.getBoundingClientRect();
+        matchShiftX = e.clientX - rect.left;
+        matchShiftY = e.clientY - rect.top;
+
+        matchDragged.style.width = rect.width + 'px';
+        matchDragged.style.height = rect.height + 'px';
+        matchDragged.style.position = 'fixed';
+        matchDragged.style.zIndex = '1000';
+        document.body.appendChild(matchDragged);
+        moveMatchAt(e.clientX, e.clientY);
+
+        document.addEventListener('pointermove', onMatchPointerMove);
+        document.addEventListener('pointerup', onMatchPointerUp);
+        document.addEventListener('pointercancel', onMatchPointerUp);
+    }
+    function moveMatchAt(x, y) {
+        matchDragged.style.left = (x - matchShiftX) + 'px';
+        matchDragged.style.top = (y - matchShiftY) + 'px';
+    }
+    function onMatchPointerMove(e) {
+        if (!matchDragged) return;
+        moveMatchAt(e.clientX, e.clientY);
+        matchDragged.style.visibility = 'hidden';
+        const below = document.elementFromPoint(e.clientX, e.clientY);
+        matchDragged.style.visibility = 'visible';
+        const zone = below ? below.closest('.match-dropzone, #match-pool') : null;
+        if (matchCurrentZone !== zone) {
+            if (matchCurrentZone) matchCurrentZone.classList.remove('bg-blue-100');
+            matchCurrentZone = zone;
+            if (matchCurrentZone) matchCurrentZone.classList.add('bg-blue-100');
+        }
+    }
+    function onMatchPointerUp(e) {
+        if (!matchDragged) return;
+        document.removeEventListener('pointermove', onMatchPointerMove);
+        document.removeEventListener('pointerup', onMatchPointerUp);
+        document.removeEventListener('pointercancel', onMatchPointerUp);
+
+        matchDragged.style.visibility = 'hidden';
+        const below = document.elementFromPoint(e.clientX, e.clientY);
+        matchDragged.style.visibility = 'visible';
+        const zone = below ? below.closest('.match-dropzone, #match-pool') : null;
+        if (matchCurrentZone) matchCurrentZone.classList.remove('bg-blue-100');
+
+        matchDragged.style.position = '';
+        matchDragged.style.left = ''; matchDragged.style.top = ''; matchDragged.style.zIndex = '';
+        matchDragged.style.width = ''; matchDragged.style.height = '';
+
+        let targetParent = matchOriginParent;
+        if (zone) {
+            if (zone.classList.contains('match-dropzone')) {
+                if (zone.children.length > 0) {
+                    document.getElementById('match-pool').appendChild(zone.children[0]);
+                }
+                targetParent = zone;
+            } else if (zone.id === 'match-pool') {
+                targetParent = zone;
+            }
+        }
+        targetParent.appendChild(matchDragged);
+
+        matchDragged = null; matchCurrentZone = null; matchOriginParent = null;
+        updateMatchProgress();
+    }
+
+    // 정답/오답을 학생에게 보여주지 않고, 모든 칸이 채워지면 다음 단계로 진행할 수 있게만 안내
+    function updateMatchProgress() {
+        const dropzones = document.querySelectorAll('.match-dropzone');
+        let filled = 0;
+        dropzones.forEach(z => { if (z.children.length > 0) filled++; });
+        const nextBtn = document.getElementById('matchNextBtn');
+        const fb = document.getElementById('match-feedback');
+        if (filled === 5) {
+            nextBtn.classList.remove('hidden');
+            fb.classList.remove('hidden');
+            fb.className = 'text-sm font-bold my-4 text-blue-600';
+            fb.textContent = '모든 칸을 채웠습니다. 아래 버튼을 눌러 다음 단계로 진행하세요.';
+        } else {
+            nextBtn.classList.add('hidden');
+            fb.classList.add('hidden');
+        }
+    }
+
+    // 매칭 결과는 학생에게 공개하지 않고 (학습 효과 확인용으로) 조용히 기록한 뒤 다음 단계로 진행
+    let matchResultPre = null;   // 1.5단계(삽화 매칭) 결과
+    let matchResultPost = null;  // 3b단계(캡처한 사진 재배치 확인) 결과 — 교사 수업 후 학습 효과 비교용
+    function finalizeMatchStep() {
+        const dropzones = document.querySelectorAll('.match-dropzone');
+        const placements = {};
+        let correct = 0;
+        dropzones.forEach(z => {
+            const card = z.children[0];
+            const placed = card ? card.dataset.stage : null;
+            placements[z.dataset.stage] = placed;
+            if (placed && placed === z.dataset.stage) correct++;
+        });
+        matchResultPre = { placements: placements, correctCount: correct };
+        nextStep(2); // 사진 조절 단계로 계속 진행
+    }
+
+    // 3단계(사진 캡처) 완료 버튼: 전체학습 모드는 "1차 활동 완료" 화면을 거쳐 수업 후 사진 재배치 확인으로,
+    // 수행평가 모드는 바로 관찰 기록으로 진행. 단, 3b단계에서 "다시 캡처하기"로 왔다면 재배치 확인으로 바로 복귀.
+    let photoFixMode = false;
+    function finishFirstRound() {
+        if (quickMode) { nextStep(4); return; }
+        if (photoFixMode) { photoFixMode = false; nextStep('3b'); return; }
+        // "1차 활동 완료" 시점(수업 전)의 캡처 스냅샷을 여기서 확실히 떠둔다 (수업 전/후 비교용)
+        if (!capturesSnapshotPre) {
+            capturesSnapshotPre = Object.assign({}, state.captures);
+        }
+        nextStep('3done');
+    }
+
+    // 3b단계에서 캡처가 잘못됐다고 판단했을 때: 3단계(캡처 테이블)로 돌아가 다시 캡처
+    function goFixPhoto() {
+        photoFixMode = true;
+        nextStep(3);
+    }
+
+    // 4단계(관찰 기록)의 "이전" 버튼: 전체학습 모드는 사진 재배치 확인(3b)으로, 수행평가 모드는 사진 캡처(3)로
+    function prevFromObservation() {
+        if (quickMode) nextStep(3);
+        else nextStep('3b');
+    }
+
+    // ══════════════════════════════════════════
+    // 3b단계: 사진 재배치 확인 (교사 수업 후, 학생이 직접 캡처한 사진을 섞어서 재배치)
+    // ══════════════════════════════════════════
+    let capturesSnapshotPre = null; // "1차 활동 완료" 시점의 캡처 스냅샷 (수업 전/후 비교용 — 이후 재캡처로 바뀌어도 이 스냅샷은 그대로 유지)
+
+    function buildPhotoRecheckStep() {
+        // 혹시 위(finishFirstRound)에서 못 떴다면 여기서라도 한 번 더 보장 (안전장치)
+        if (!capturesSnapshotPre) {
+            capturesSnapshotPre = Object.assign({}, state.captures);
+        }
+        const pool = document.getElementById('photo-match-pool');
+        const slots = document.getElementById('photo-match-slots');
+        pool.innerHTML = ''; slots.innerHTML = '';
+
+        const shuffled = [...stages].sort(() => Math.random() - 0.5);
+        shuffled.forEach((stage, idx) => {
+            const card = document.createElement('div');
+            card.className = 'w-24 h-24 bg-white border-2 border-slate-300 rounded-xl shadow overflow-hidden';
+            card.style.cursor = 'grab';
+            card.style.touchAction = 'none';
+            card.dataset.stage = stage;
+            card.id = `photo-match-card-${idx}`;
+            const imgSrc = state.captures[stage];
+            card.innerHTML = imgSrc
+                ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;pointer-events:none;">`
+                : `<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-400">사진 없음</div>`;
+            card.addEventListener('pointerdown', onPhotoMatchPointerDown);
+            pool.appendChild(card);
+        });
+
+        stages.forEach(stage => {
+            const wrap = document.createElement('div');
+            wrap.className = 'flex flex-col items-center';
+            wrap.innerHTML = `
+                <div class="text-sm font-bold mb-1">${stage}</div>
+                <div class="photo-match-dropzone w-24 h-24 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 flex items-center justify-center" data-stage="${stage}"></div>
+            `;
+            slots.appendChild(wrap);
+        });
+
+        document.getElementById('photo-match-feedback').classList.add('hidden');
+        document.getElementById('photoMatchNextBtn').classList.add('hidden');
+    }
+
+    let photoMatchDragged = null, photoMatchShiftX = 0, photoMatchShiftY = 0, photoMatchCurrentZone = null, photoMatchOriginParent = null;
+
+    function onPhotoMatchPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        photoMatchDragged = e.currentTarget;
+        e.preventDefault();
+        photoMatchOriginParent = photoMatchDragged.parentElement;
+        const rect = photoMatchDragged.getBoundingClientRect();
+        photoMatchShiftX = e.clientX - rect.left;
+        photoMatchShiftY = e.clientY - rect.top;
+        photoMatchDragged.style.width = rect.width + 'px';
+        photoMatchDragged.style.height = rect.height + 'px';
+        photoMatchDragged.style.position = 'fixed';
+        photoMatchDragged.style.zIndex = '1000';
+        document.body.appendChild(photoMatchDragged);
+        movePhotoMatchAt(e.clientX, e.clientY);
+        document.addEventListener('pointermove', onPhotoMatchPointerMove);
+        document.addEventListener('pointerup', onPhotoMatchPointerUp);
+        document.addEventListener('pointercancel', onPhotoMatchPointerUp);
+    }
+    function movePhotoMatchAt(x, y) {
+        photoMatchDragged.style.left = (x - photoMatchShiftX) + 'px';
+        photoMatchDragged.style.top = (y - photoMatchShiftY) + 'px';
+    }
+    function onPhotoMatchPointerMove(e) {
+        if (!photoMatchDragged) return;
+        movePhotoMatchAt(e.clientX, e.clientY);
+        photoMatchDragged.style.visibility = 'hidden';
+        const below = document.elementFromPoint(e.clientX, e.clientY);
+        photoMatchDragged.style.visibility = 'visible';
+        const zone = below ? below.closest('.photo-match-dropzone, #photo-match-pool') : null;
+        if (photoMatchCurrentZone !== zone) {
+            if (photoMatchCurrentZone) photoMatchCurrentZone.classList.remove('bg-blue-100');
+            photoMatchCurrentZone = zone;
+            if (photoMatchCurrentZone) photoMatchCurrentZone.classList.add('bg-blue-100');
+        }
+    }
+    function onPhotoMatchPointerUp(e) {
+        if (!photoMatchDragged) return;
+        document.removeEventListener('pointermove', onPhotoMatchPointerMove);
+        document.removeEventListener('pointerup', onPhotoMatchPointerUp);
+        document.removeEventListener('pointercancel', onPhotoMatchPointerUp);
+
+        photoMatchDragged.style.visibility = 'hidden';
+        const below = document.elementFromPoint(e.clientX, e.clientY);
+        photoMatchDragged.style.visibility = 'visible';
+        const zone = below ? below.closest('.photo-match-dropzone, #photo-match-pool') : null;
+        if (photoMatchCurrentZone) photoMatchCurrentZone.classList.remove('bg-blue-100');
+
+        photoMatchDragged.style.position = '';
+        photoMatchDragged.style.left = ''; photoMatchDragged.style.top = ''; photoMatchDragged.style.zIndex = '';
+        photoMatchDragged.style.width = ''; photoMatchDragged.style.height = '';
+
+        let targetParent = photoMatchOriginParent;
+        if (zone) {
+            if (zone.classList.contains('photo-match-dropzone')) {
+                if (zone.children.length > 0) {
+                    document.getElementById('photo-match-pool').appendChild(zone.children[0]);
+                }
+                targetParent = zone;
+            } else if (zone.id === 'photo-match-pool') {
+                targetParent = zone;
+            }
+        }
+        targetParent.appendChild(photoMatchDragged);
+
+        photoMatchDragged = null; photoMatchCurrentZone = null; photoMatchOriginParent = null;
+        updatePhotoMatchProgress();
+    }
+    function updatePhotoMatchProgress() {
+        const dropzones = document.querySelectorAll('.photo-match-dropzone');
+        let filled = 0;
+        dropzones.forEach(z => { if (z.children.length > 0) filled++; });
+        const nextBtn = document.getElementById('photoMatchNextBtn');
+        const fb = document.getElementById('photo-match-feedback');
+        if (filled === 5) {
+            nextBtn.classList.remove('hidden');
+            fb.classList.remove('hidden');
+            fb.className = 'text-sm font-bold my-4 text-blue-600';
+            fb.textContent = '모든 칸을 채웠습니다. 아래 버튼을 눌러 다음 단계로 진행하세요.';
+        } else {
+            nextBtn.classList.add('hidden');
+            fb.classList.add('hidden');
+        }
+    }
+    // 재배치 결과는 학생에게 공개하지 않고 조용히 기록한 뒤 관찰 기록 단계로 진행
+    function finalizePhotoRecheck() {
+        const dropzones = document.querySelectorAll('.photo-match-dropzone');
+        const placements = {};
+        let correct = 0;
+        dropzones.forEach(z => {
+            const card = z.children[0];
+            const placed = card ? card.dataset.stage : null;
+            placements[z.dataset.stage] = placed;
+            if (placed && placed === z.dataset.stage) correct++;
+        });
+        matchResultPost = { placements: placements, correctCount: correct };
+        nextStep(4);
+    }
+
+    // Canvas Logic
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    // 원본 사진은 화질 그대로면 용량이 너무 커서(스마트폰 카메라 사진 등) 제출이 조용히 실패할 수 있어,
+    // 제출용으로는 긴 변 기준 1600px로 축소한 JPEG를 별도로 만들어 저장합니다.
+    // (자르기/회전 도구는 원본 해상도 그대로인 img를 계속 사용하므로 캡처 화질에는 영향 없음)
+    function makeSubmittableOriginal(img) {
+        const maxDim = 1600;
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        return c.toDataURL('image/jpeg', 0.85);
+    }
+
+    function handleFile(idx, e) { const reader = new FileReader(); reader.onload = ev => { const img = new Image(); img.onload = () => { state.imgStates[idx].img = img; state.imgStates[idx].original = makeSubmittableOriginal(img); drawCanvas(); }; img.src = ev.target.result; }; reader.readAsDataURL(e.target.files[0]); }
+    function drawCanvas() {
+        const st = state.imgStates[state.activeIdx];
+        if(!st.img) return;
+        canvas.width = document.getElementById('canvas-container').clientWidth;
+        canvas.height = document.getElementById('canvas-container').clientHeight;
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(canvas.width/2 + st.dx, canvas.height/2 + st.dy);
+        ctx.rotate(st.rot * Math.PI / 180);
+        ctx.scale(st.zoom, st.zoom);
+        ctx.drawImage(st.img, -st.img.width/2, -st.img.height/2);
+        ctx.restore();
+    }
+    
+    function updateState() { state.imgStates[state.activeIdx].rot = document.getElementById('rot').value; state.imgStates[state.activeIdx].zoom = document.getElementById('zoom').value; drawCanvas(); }
+    function updateViewfinder() { const s = document.getElementById('vfSize').value; document.getElementById('viewfinder').style.width = s + 'px'; document.getElementById('viewfinder').style.height = s + 'px'; }
+    function changeActiveCanvas(idx) { state.activeIdx = idx; drawCanvas(); }
+
+    let isDragging = false; let lastX = 0; let lastY = 0;
+    canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+    window.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mousemove', e => { if(!isDragging) return; state.imgStates[state.activeIdx].dx += (e.clientX - lastX); state.imgStates[state.activeIdx].dy += (e.clientY - lastY); lastX = e.clientX; lastY = e.clientY; drawCanvas(); });
+
+    function renderFinal() {
+        const div = document.getElementById('final-report');
+        const originalCount = state.imgStates.filter(s => s.original).length;
+        let html = `<div class="mb-6 pb-4 border-b">학생: ${document.getElementById('std-grade').value}학년 ${document.getElementById('std-class').value}반 ${document.getElementById('std-num').value}번 ${document.getElementById('std-name').value}</div>
+            <div class="mb-6 p-3 rounded-lg ${originalCount > 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} text-sm font-bold">
+                📷 제출 시 함께 전송될 원본 사진: ${originalCount}장 ${originalCount === 0 ? '(2단계에서 파일을 업로드하지 않으면 원본 사진 없이 제출됩니다)' : ''}
+            </div>`;
+
+        // 수업 전/후 사진 배치 비교 (전체학습 모드 + 재배치 확인을 마친 경우에만 표시)
+        if (!quickMode && capturesSnapshotPre && matchResultPost) {
+            html += `<div class="mb-6 p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded">
+                <h3 class="font-bold text-indigo-800 mb-3">📊 수업 전/후 사진 배치 비교</h3>
+                <table class="w-full border-collapse bg-white text-sm">
+                    <thead><tr class="bg-slate-50">
+                        <th class="p-2 border">단계</th><th class="p-2 border">수업 전 캡처</th><th class="p-2 border">수업 후 재배치 결과</th><th class="p-2 border">일치</th>
+                    </tr></thead><tbody>`;
+            stages.forEach(stage => {
+                const preImg = capturesSnapshotPre[stage];
+                const postStage = matchResultPost.placements ? matchResultPost.placements[stage] : null;
+                const postImg = postStage ? state.captures[postStage] : null;
+                const match = postStage === stage;
+                html += `<tr>
+                    <td class="p-2 border font-bold text-center">${stage}</td>
+                    <td class="p-2 border text-center">${preImg ? `<img src="${preImg}" class="w-20 h-20 object-cover mx-auto border">` : '-'}</td>
+                    <td class="p-2 border text-center">${postImg ? `<img src="${postImg}" class="w-20 h-20 object-cover mx-auto border">` : '-'}</td>
+                    <td class="p-2 border text-center text-lg">${match ? '✅' : '⚠️'}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>
+                <p class="text-xs text-slate-500 mt-2">※ "수업 후 재배치 결과"는 사진을 다시 캡처하지 않고, 앞서 찍어둔 사진들을 다시 올바른 단계로 배치했는지 확인한 결과입니다.</p>
+            </div>`;
+        }
+
+        html += stages.map(s => `
+            <div class="border-b p-4 grid grid-cols-2 gap-4">
+                <div class="font-bold text-lg">${s}</div>
+                <div>${state.captures[s] ? `<img src="${state.captures[s]}" class="w-32 h-32 border">` : '사진 없음'}</div>
+                <div class="col-span-2 text-sm"><strong class="block">관찰 내용:</strong> ${state.observations[s] || '-'}</div>
+            </div>`).join('');
+        div.innerHTML = html;
+    }
+    window.addEventListener('resize', drawCanvas);
+
+    // 교사용 대시보드로 제출
+    function submitReport() {
+        if(SUBMIT_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL') {
+            document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 주소(SUBMIT_URL)가 아직 설정되지 않았습니다. 선생님께 문의하세요.</span>';
+            return;
+        }
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true; btn.innerText = '제출 중...';
+        document.getElementById('submit-status').innerHTML = '<span class="text-slate-500">제출 중입니다. 잠시만 기다려주세요...</span>';
+
+        const modeLabel = quickMode ? '수행평가(이론생략)' : '전체학습';
+        const payload = {
+            timestamp: new Date().toISOString(),
+            mode: modeLabel,
+            grade: document.getElementById('std-grade').value,
+            class: document.getElementById('std-class').value,
+            num: document.getElementById('std-num').value,
+            name: document.getElementById('std-name').value,
+            observations: state.observations,
+            captures: state.captures, // { 간기: 'data:image/png;base64,...', ... } — 수업 후(최종) 배치
+            preCaptures: capturesSnapshotPre || {}, // 수업 전(1차 활동 완료 시점) 사진 배치 스냅샷 — 교사 비교용
+            originals: state.imgStates.map(s => s.original || null), // 학생이 업로드한 원본 사진 (최대 3장, 자르기/회전 전)
+            matchPreCorrectCount: matchResultPre ? matchResultPre.correctCount : null,   // 1.5단계 삽화 매칭 정답 개수(0~5), 학생에게는 비공개
+            matchPostCorrectCount: matchResultPost ? matchResultPost.correctCount : null, // 3b단계 사진 재배치 정답 개수(0~5, 교사 수업 후 측정), 학생에게는 비공개
+            matchPrePlacements: matchResultPre ? matchResultPre.placements : null,
+            matchPostPlacements: matchResultPost ? matchResultPost.placements : null
+        };
+
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Apps Script 웹앱 CORS 우회용
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false; btn.innerText = '교사에게 제출하기';
+            if(data && data.result === 'success') {
+                document.getElementById('submit-status').innerHTML = '<span class="text-green-600">✅ 제출이 완료되었습니다!</span>';
+                showMsg('제출 완료!');
+            } else {
+                document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 실패: ' + (data && data.message ? data.message : '알 수 없는 오류') + '</span>';
+            }
+        })
+        .catch(err => {
+            btn.disabled = false; btn.innerText = '교사에게 제출하기';
+            document.getElementById('submit-status').innerHTML = '<span class="text-red-600">⚠ 제출 중 오류가 발생했습니다. 인터넷 연결을 확인하세요.</span>';
+        });
+    }
+</script>
+</body>
+</html>
